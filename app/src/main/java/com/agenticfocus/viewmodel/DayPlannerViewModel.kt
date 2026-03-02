@@ -7,6 +7,8 @@ import android.media.ToneGenerator
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.agenticfocus.data.db.AppDatabase
+import com.agenticfocus.data.repository.DayPlannerRepository
 import com.agenticfocus.service.TimerService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -18,8 +20,16 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 
 class DayPlannerViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val today: String = LocalDate.now().toString()
+
+    private val repository = DayPlannerRepository(
+        dayTaskDao = AppDatabase.getInstance(application).dayTaskDao(),
+        sessionDao = AppDatabase.getInstance(application).pomodoroSessionDao()
+    )
 
     private val _state = MutableStateFlow(DayPlannerState())
     val state: StateFlow<DayPlannerState> = _state.asStateFlow()
@@ -37,16 +47,40 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
     private var previousCompleted = 0
 
     init {
+        // Load persisted tasks for today on startup
+        viewModelScope.launch {
+            val persisted = repository.getTasksForDate(today)
+            if (persisted.isNotEmpty()) {
+                _state.update { it.copy(tasks = persisted) }
+            }
+        }
+
+        // Observe timer to auto-increment completed pomodoros
         viewModelScope.launch {
             TimerService.timerState.collect { timerState ->
                 val activeId = _state.value.activeTaskId
                 if (activeId != null && timerState.completedPomodoros > previousCompleted) {
+                    val endTime = System.currentTimeMillis()
+                    val startTime = endTime - (25 * 60 * 1000L)
+
                     _state.update { s ->
                         s.copy(tasks = s.tasks.map { task ->
                             if (task.id == activeId)
                                 task.copy(completedPomodoros = task.completedPomodoros + 1)
                             else task
                         })
+                    }
+
+                    persistAll()
+
+                    viewModelScope.launch {
+                        repository.recordSession(
+                            dayTaskId = activeId,
+                            date = today,
+                            startTime = startTime,
+                            endTime = endTime,
+                            durationMinutes = 25
+                        )
                     }
                 }
                 previousCompleted = timerState.completedPomodoros
@@ -59,6 +93,7 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
         val before = totalPlanned()
         _state.update { it.copy(tasks = it.tasks + DayTask(name = name.trim())) }
         checkCapacityAlert(before)
+        persistAll()
     }
 
     fun removeTask(id: String) {
@@ -68,6 +103,8 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
                 activeTaskId = if (s.activeTaskId == id) null else s.activeTaskId
             )
         }
+        viewModelScope.launch { repository.deleteTask(id) }
+        persistAll()
     }
 
     fun reorderTasks(fromIndex: Int, toIndex: Int) {
@@ -76,6 +113,7 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
             list.add(toIndex, list.removeAt(fromIndex))
             s.copy(tasks = list)
         }
+        persistAll()
     }
 
     fun updatePlanned(id: String, delta: Int) {
@@ -92,6 +130,7 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
             })
         }
         checkCapacityAlert(before)
+        persistAll()
     }
 
     fun updateName(id: String, name: String) {
@@ -101,6 +140,7 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
                 if (task.id == id) task.copy(name = name.trim()) else task
             })
         }
+        persistAll()
     }
 
     fun activateTask(task: DayTask) {
@@ -116,6 +156,13 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
         }
         getApplication<Application>().startService(intent)
         _navigateToTimerEvent.tryEmit(Unit)
+    }
+
+    private fun persistAll() {
+        val snapshot = _state.value.tasks
+        viewModelScope.launch {
+            repository.saveAllTasks(snapshot, today)
+        }
     }
 
     private fun totalPlanned(): Int = _state.value.tasks.sumOf { it.plannedPomodoros }
