@@ -66,7 +66,7 @@ public final class DayTaskDao_Impl implements DayTaskDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT INTO `day_tasks` (`id`,`date`,`name`,`plannedPomodoros`,`completedPomodoros`,`position`,`createdAt`) VALUES (?,?,?,?,?,?,?)";
+        return "INSERT INTO `day_tasks` (`id`,`date`,`name`,`plannedPomodoros`,`completedPomodoros`,`position`,`templateId`,`createdAt`) VALUES (?,?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -78,13 +78,18 @@ public final class DayTaskDao_Impl implements DayTaskDao {
         statement.bindLong(4, entity.getPlannedPomodoros());
         statement.bindLong(5, entity.getCompletedPomodoros());
         statement.bindLong(6, entity.getPosition());
-        statement.bindLong(7, entity.getCreatedAt());
+        if (entity.getTemplateId() == null) {
+          statement.bindNull(7);
+        } else {
+          statement.bindString(7, entity.getTemplateId());
+        }
+        statement.bindLong(8, entity.getCreatedAt());
       }
     }, new EntityDeletionOrUpdateAdapter<DayTaskEntity>(__db) {
       @Override
       @NonNull
       protected String createQuery() {
-        return "UPDATE `day_tasks` SET `id` = ?,`date` = ?,`name` = ?,`plannedPomodoros` = ?,`completedPomodoros` = ?,`position` = ?,`createdAt` = ? WHERE `id` = ?";
+        return "UPDATE `day_tasks` SET `id` = ?,`date` = ?,`name` = ?,`plannedPomodoros` = ?,`completedPomodoros` = ?,`position` = ?,`templateId` = ?,`createdAt` = ? WHERE `id` = ?";
       }
 
       @Override
@@ -96,8 +101,13 @@ public final class DayTaskDao_Impl implements DayTaskDao {
         statement.bindLong(4, entity.getPlannedPomodoros());
         statement.bindLong(5, entity.getCompletedPomodoros());
         statement.bindLong(6, entity.getPosition());
-        statement.bindLong(7, entity.getCreatedAt());
-        statement.bindString(8, entity.getId());
+        if (entity.getTemplateId() == null) {
+          statement.bindNull(7);
+        } else {
+          statement.bindString(7, entity.getTemplateId());
+        }
+        statement.bindLong(8, entity.getCreatedAt());
+        statement.bindString(9, entity.getId());
       }
     });
   }
@@ -184,6 +194,7 @@ public final class DayTaskDao_Impl implements DayTaskDao {
           final int _cursorIndexOfPlannedPomodoros = CursorUtil.getColumnIndexOrThrow(_cursor, "plannedPomodoros");
           final int _cursorIndexOfCompletedPomodoros = CursorUtil.getColumnIndexOrThrow(_cursor, "completedPomodoros");
           final int _cursorIndexOfPosition = CursorUtil.getColumnIndexOrThrow(_cursor, "position");
+          final int _cursorIndexOfTemplateId = CursorUtil.getColumnIndexOrThrow(_cursor, "templateId");
           final int _cursorIndexOfCreatedAt = CursorUtil.getColumnIndexOrThrow(_cursor, "createdAt");
           final List<DayTaskEntity> _result = new ArrayList<DayTaskEntity>(_cursor.getCount());
           while (_cursor.moveToNext()) {
@@ -200,9 +211,15 @@ public final class DayTaskDao_Impl implements DayTaskDao {
             _tmpCompletedPomodoros = _cursor.getInt(_cursorIndexOfCompletedPomodoros);
             final int _tmpPosition;
             _tmpPosition = _cursor.getInt(_cursorIndexOfPosition);
+            final String _tmpTemplateId;
+            if (_cursor.isNull(_cursorIndexOfTemplateId)) {
+              _tmpTemplateId = null;
+            } else {
+              _tmpTemplateId = _cursor.getString(_cursorIndexOfTemplateId);
+            }
             final long _tmpCreatedAt;
             _tmpCreatedAt = _cursor.getLong(_cursorIndexOfCreatedAt);
-            _item = new DayTaskEntity(_tmpId,_tmpDate,_tmpName,_tmpPlannedPomodoros,_tmpCompletedPomodoros,_tmpPosition,_tmpCreatedAt);
+            _item = new DayTaskEntity(_tmpId,_tmpDate,_tmpName,_tmpPlannedPomodoros,_tmpCompletedPomodoros,_tmpPosition,_tmpTemplateId,_tmpCreatedAt);
             _result.add(_item);
           }
           return _result;

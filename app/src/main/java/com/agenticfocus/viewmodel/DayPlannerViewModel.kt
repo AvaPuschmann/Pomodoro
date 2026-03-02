@@ -8,6 +8,7 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.agenticfocus.data.db.AppDatabase
+import com.agenticfocus.data.entity.TaskTemplateEntity
 import com.agenticfocus.data.repository.DayPlannerRepository
 import com.agenticfocus.service.TimerService
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +87,21 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
                 previousCompleted = timerState.completedPomodoros
             }
         }
+    }
+
+    fun addTaskFromTemplate(template: TaskTemplateEntity) {
+        val before = totalPlanned()
+        _state.update {
+            it.copy(
+                tasks = it.tasks + DayTask(
+                    name = template.title,
+                    plannedPomodoros = template.defaultPomodoros,
+                    templateId = template.id
+                )
+            )
+        }
+        checkCapacityAlert(before)
+        persistAll()
     }
 
     fun addTask(name: String) {

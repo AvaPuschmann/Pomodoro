@@ -11,6 +11,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -26,13 +27,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.agenticfocus.ui.screen.DayPlannerScreen
+import com.agenticfocus.ui.screen.LibraryScreen
 import com.agenticfocus.ui.screen.PomodoroScreen
 import com.agenticfocus.ui.theme.AgenticFocusTheme
 import com.agenticfocus.viewmodel.DayPlannerViewModel
+import com.agenticfocus.viewmodel.LibraryViewModel
 
 private enum class Tab(val label: String, val icon: ImageVector) {
-    TIMER("Timer", Icons.Filled.PlayArrow),      // confirmed in material-icons-core
-    PLANNER("Planner", Icons.Default.List)       // confirmed in material-icons-core
+    TIMER("Timer", Icons.Filled.PlayArrow),
+    PLANNER("Planner", Icons.Default.List),
+    LIBRARY("Biblio", Icons.Default.MenuBook)   // material-icons-extended
 }
 
 class MainActivity : ComponentActivity() {
@@ -57,6 +61,7 @@ class MainActivity : ComponentActivity() {
                 }
 
                 val dayPlannerVM: DayPlannerViewModel = viewModel()
+                val libraryVM: LibraryViewModel = viewModel()
                 var selectedTab by remember { mutableStateOf(Tab.TIMER) }
 
                 LaunchedEffect(Unit) {
@@ -79,11 +84,10 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
-                    // innerPadding passed to screens so content is not occluded
-                    // by the NavigationBar or system gesture bar
                     when (selectedTab) {
-                        Tab.TIMER   -> PomodoroScreen(contentPadding = innerPadding)
-                        Tab.PLANNER -> DayPlannerScreen(dayPlannerVM, contentPadding = innerPadding)
+                        Tab.TIMER    -> PomodoroScreen(contentPadding = innerPadding)
+                        Tab.PLANNER  -> DayPlannerScreen(dayPlannerVM, libraryVM, contentPadding = innerPadding)
+                        Tab.LIBRARY  -> LibraryScreen(libraryVM, contentPadding = innerPadding)
                     }
                 }
             }

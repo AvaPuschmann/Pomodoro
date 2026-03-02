@@ -11,5 +11,6 @@ data class DayTaskEntity(
     val plannedPomodoros: Int,
     val completedPomodoros: Int,
     val position: Int,
+    val templateId: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )

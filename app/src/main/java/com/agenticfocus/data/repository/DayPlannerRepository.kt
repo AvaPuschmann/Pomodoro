@@ -36,7 +36,8 @@ private fun DayTaskEntity.toDayTask() = DayTask(
     id = id,
     name = name,
     plannedPomodoros = plannedPomodoros,
-    completedPomodoros = completedPomodoros
+    completedPomodoros = completedPomodoros,
+    templateId = templateId
 )
 
 private fun DayTask.toEntity(date: String, position: Int) = DayTaskEntity(
@@ -45,5 +46,6 @@ private fun DayTask.toEntity(date: String, position: Int) = DayTaskEntity(
     name = name,
     plannedPomodoros = plannedPomodoros,
     completedPomodoros = completedPomodoros,
-    position = position
+    position = position,
+    templateId = templateId
 )
