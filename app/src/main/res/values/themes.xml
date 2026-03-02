@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base theme for the window before Compose takes over.
+    <!-- Base theme for the window before Compose takes over. Done by PPU
          Using NoActionBar (not Fullscreen) to stay compatible with enableEdgeToEdge(). -->
     <style name="Theme.AgenticFocus" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
