@@ -1,0 +1,98 @@
+[
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\drawable_ic_notification.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\drawable\\ic_notification.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-xhdpi_ic_launcher.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-xhdpi\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\raw_pause.mp3.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\raw\\pause.mp3"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-xhdpi_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-xhdpi\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\raw_fiveminutes.mp3.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\raw\\fiveminutes.mp3"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-mdpi_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-mdpi\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-mdpi_ic_launcher.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-mdpi\\ic_launcher.xml"
+    },
+    {
+        "merged": "com.agenticfocus.app-debug-4:/raw_pause.mp3.flat",
+        "source": "com.agenticfocus.app-main-6:/raw/pause.mp3"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\drawable_ic_pause.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\drawable\\ic_pause.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-xxxhdpi_ic_launcher.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-xxxhdpi\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\raw_oneminute.mp3.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\raw\\oneminute.mp3"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\drawable_greenhouse_bg.jpg.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\drawable\\greenhouse_bg.jpg"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\raw_tenminutes.mp3.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\raw\\tenminutes.mp3"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-hdpi_ic_launcher.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-hdpi\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\raw_threeminutes.mp3.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\raw\\threeminutes.mp3"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-xxhdpi_ic_launcher.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-xxhdpi\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\drawable_tomato.png.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\drawable\\tomato.png"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-xxxhdpi_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-xxxhdpi\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\raw_restart.mp3.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\raw\\restart.mp3"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-hdpi_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-hdpi\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\mipmap-xxhdpi_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\mipmap-xxhdpi\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\raw_timer_end.mp3.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\raw\\timer_end.mp3"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\drawable_nature_bg.jpg.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\drawable\\nature_bg.jpg"
+    },
+    {
+        "merged": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-debug-4:\\drawable_ic_launcher_foreground.xml.flat",
+        "source": "C:\\Users\\philippe.puschmann\\.gradle\\daemon\\8.14.3\\com.agenticfocus.app-main-6:\\drawable\\ic_launcher_foreground.xml"
+    }
+]

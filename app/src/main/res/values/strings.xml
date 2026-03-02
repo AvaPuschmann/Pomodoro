@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Agentic Focus</string>
+    <string name="notification_channel_name">Timer</string>
+    <string name="notification_channel_description">Pomodoro timer notifications</string>
+    <string name="hint_task">What are you focusing on?</string>
+</resources>

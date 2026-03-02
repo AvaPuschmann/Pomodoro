@@ -1,0 +1,37 @@
+com.agenticfocus.test.app-androidTest-0 C:\KM\Assets\Claude\01 product\AgenticFocus\app\build\generated\res\resValues\androidTest\debug
+com.agenticfocus.test.app-mergeDebugAndroidTestResources-1 C:\KM\Assets\Claude\01 product\AgenticFocus\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\merged.dir
+com.agenticfocus.test.app-mergeDebugAndroidTestResources-2 C:\KM\Assets\Claude\01 product\AgenticFocus\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\stripped.dir
+com.agenticfocus.test.app-debugAndroidTest-3 C:\KM\Assets\Claude\01 product\AgenticFocus\app\build\intermediates\merged_res\debugAndroidTest\mergeDebugAndroidTestResources
+com.agenticfocus.test.app-lifecycle-viewmodel-savedstate-2.8.5-4 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\06a6a3e1a7d03dace2efff431a59f383\transformed\lifecycle-viewmodel-savedstate-2.8.5\res
+com.agenticfocus.test.app-activity-1.9.2-5 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\06dd3b906600e9685c00accadd67d095\transformed\activity-1.9.2\res
+com.agenticfocus.test.app-emoji2-1.3.0-6 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\0a2d992df6f912d8b6f1efb8aa740438\transformed\emoji2-1.3.0\res
+com.agenticfocus.test.app-runtime-release-7 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\13e8fffec1bf84ed3df9bb8110928ea8\transformed\runtime-release\res
+com.agenticfocus.test.app-activity-ktx-1.9.2-8 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\24512e19aafdce9738231cc3aa2a1e5f\transformed\activity-ktx-1.9.2\res
+com.agenticfocus.test.app-lifecycle-process-2.8.5-9 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\25bf1e9fdabb347b7027221d4490b0d5\transformed\lifecycle-process-2.8.5\res
+com.agenticfocus.test.app-savedstate-1.2.1-10 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\25ca4b3605935197d10b8a755b345ccf\transformed\savedstate-1.2.1\res
+com.agenticfocus.test.app-ui-text-release-11 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\323229a6f2e62c4bfd10a43f7778d83c\transformed\ui-text-release\res
+com.agenticfocus.test.app-ui-unit-release-12 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\343b509b145f65abe262548f48e0b8e7\transformed\ui-unit-release\res
+com.agenticfocus.test.app-graphics-path-1.0.1-13 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\367ad793ada9479b16aa08f8909d6f1f\transformed\graphics-path-1.0.1\res
+com.agenticfocus.test.app-lifecycle-runtime-compose-release-14 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\497393031aa751b87a64fb8132db2bbe\transformed\lifecycle-runtime-compose-release\res
+com.agenticfocus.test.app-lifecycle-livedata-core-2.8.5-15 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\4d442eea47850bc36c4104bcabee6731\transformed\lifecycle-livedata-core-2.8.5\res
+com.agenticfocus.test.app-profileinstaller-1.3.1-16 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\53b5d6b2f814a8e3f87b4e4c607c81cd\transformed\profileinstaller-1.3.1\res
+com.agenticfocus.test.app-core-1.13.1-17 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\62dd33b56b1f5b300891d66c9a587385\transformed\core-1.13.1\res
+com.agenticfocus.test.app-lifecycle-viewmodel-release-18 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\812b2854c63950591a996630d650d41e\transformed\lifecycle-viewmodel-release\res
+com.agenticfocus.test.app-lifecycle-runtime-ktx-release-19 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\888f48dc58f98c9735560d354b51a267\transformed\lifecycle-runtime-ktx-release\res
+com.agenticfocus.test.app-core-1.5.0-20 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\8c65aa5d96f653a7558dbdfa4e04ccdc\transformed\core-1.5.0\res
+com.agenticfocus.test.app-startup-runtime-1.1.1-21 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\9041ff0e9924874ab6c9b5f2b019981b\transformed\startup-runtime-1.1.1\res
+com.agenticfocus.test.app-lifecycle-viewmodel-ktx-2.8.5-22 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\9128f98d73f8889a01b2bd04e3f77c59\transformed\lifecycle-viewmodel-ktx-2.8.5\res
+com.agenticfocus.test.app-activity-compose-1.9.2-23 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\a4c63ea65161f2c384f07b291b2e8b09\transformed\activity-compose-1.9.2\res
+com.agenticfocus.test.app-lifecycle-runtime-release-24 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\b6b8a7b30db4f9923acddf0e8ddf52b3\transformed\lifecycle-runtime-release\res
+com.agenticfocus.test.app-annotation-experimental-1.4.1-25 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\b7a36f80a9a5066df2360aeac3407436\transformed\annotation-experimental-1.4.1\res
+com.agenticfocus.test.app-core-ktx-1.13.1-26 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\b7e677bd7ed276455a7d64be67742edb\transformed\core-ktx-1.13.1\res
+com.agenticfocus.test.app-customview-poolingcontainer-1.0.0-27 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\c53d77403b11e85d7eee15f164433101\transformed\customview-poolingcontainer-1.0.0\res
+com.agenticfocus.test.app-ui-test-junit4-release-28 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\cb1df50504ab9a04e0143326b8bf8449\transformed\ui-test-junit4-release\res
+com.agenticfocus.test.app-runtime-saveable-release-29 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\d0b86f7c93c3a7b736d62aff13261cf2\transformed\runtime-saveable-release\res
+com.agenticfocus.test.app-ui-release-30 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\e106dc72f6bb104a1927373c2a444ac5\transformed\ui-release\res
+com.agenticfocus.test.app-ui-geometry-release-31 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\ea8f1da122afc652e42efa69b9e5042d\transformed\ui-geometry-release\res
+com.agenticfocus.test.app-core-runtime-2.2.0-32 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\f768e2a1079bb9a25e05bc038551c97f\transformed\core-runtime-2.2.0\res
+com.agenticfocus.test.app-ui-util-release-33 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\fbef191bd6977d31dfec9f8a566e9c1a\transformed\ui-util-release\res
+com.agenticfocus.test.app-ui-graphics-release-34 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\fe2aabb9d80ad8425067a0fd8e32a680\transformed\ui-graphics-release\res
+com.agenticfocus.test.app-savedstate-ktx-1.2.1-35 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\ff5f020b5e4b6f57f28f7b70e951b041\transformed\savedstate-ktx-1.2.1\res
+com.agenticfocus.test.app-ui-test-release-36 C:\Users\philippe.puschmann\.gradle\caches\8.14.3\transforms\ffa7a069412f72d01530d6e8df696960\transformed\ui-test-release\res

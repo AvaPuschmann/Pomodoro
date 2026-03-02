@@ -1,0 +1,23 @@
+R_DEF: Internal format may change without notice
+local
+color ic_launcher_background
+drawable greenhouse_bg
+drawable ic_launcher_foreground
+drawable ic_notification
+drawable ic_pause
+drawable nature_bg
+drawable tomato
+mipmap ic_launcher
+mipmap ic_launcher_round
+raw fiveminutes
+raw oneminute
+raw pause
+raw restart
+raw tenminutes
+raw threeminutes
+raw timer_end
+string app_name
+string hint_task
+string notification_channel_description
+string notification_channel_name
+style Theme.AgenticFocus
