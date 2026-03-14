@@ -9,6 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.agenticfocus.data.dao.DayTaskDao
 import com.agenticfocus.data.dao.DomainDao
 import com.agenticfocus.data.dao.PomodoroSessionDao
+import com.agenticfocus.data.dao.StatsDao
 import com.agenticfocus.data.dao.TaskTemplateDao
 import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.DomainEntity
@@ -31,6 +32,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun pomodoroSessionDao(): PomodoroSessionDao
     abstract fun domainDao(): DomainDao
     abstract fun taskTemplateDao(): TaskTemplateDao
+    abstract fun statsDao(): StatsDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null

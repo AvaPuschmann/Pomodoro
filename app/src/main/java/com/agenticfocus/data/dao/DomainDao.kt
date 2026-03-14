@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.agenticfocus.data.entity.DomainEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -18,6 +19,12 @@ interface DomainDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(domains: List<DomainEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(domain: DomainEntity)
+
+    @Update
+    suspend fun update(domain: DomainEntity)
 
     @Query("DELETE FROM domains WHERE id = :id")
     suspend fun deleteById(id: String)

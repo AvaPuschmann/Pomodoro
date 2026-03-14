@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Update
 import com.agenticfocus.data.entity.TaskTemplateEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -16,6 +17,12 @@ interface TaskTemplateDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(template: TaskTemplateEntity)
 
+    @Update
+    suspend fun update(template: TaskTemplateEntity)
+
     @Query("DELETE FROM task_templates WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM task_templates WHERE domainId = :domainId")
+    suspend fun deleteByDomainId(domainId: String)
 }

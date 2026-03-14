@@ -50,7 +50,8 @@ fun DayTaskRow(
     onIncreasePlanned: () -> Unit,
     onDecreasePlanned: () -> Unit,
     onNameChange: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showDragHandle: Boolean = true
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var editText by remember(task.name) { mutableStateOf(task.name) }
@@ -132,14 +133,15 @@ fun DayTaskRow(
                 Text("+", fontSize = 18.sp, color = TextWhite)
             }
 
-            // Drag handle — DragHandle icon (reorder affordance, not navigation drawer)
-            // Icons.Default.DragHandle is in material-icons-core (BOM 2024.09.00+)
-            Icon(
-                imageVector = Icons.Default.DragHandle,
-                contentDescription = "Réordonner",
-                tint = SubtleWhite,
-                modifier = dragHandleModifier.size(24.dp)
-            )
+            // Drag handle — hidden for done tasks
+            if (showDragHandle) {
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = "Réordonner",
+                    tint = SubtleWhite,
+                    modifier = dragHandleModifier.size(24.dp)
+                )
+            }
         }
 
         // Tomato icons row — compact 20dp, no Orange state in Planner

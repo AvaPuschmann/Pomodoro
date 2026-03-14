@@ -3,6 +3,7 @@ package com.agenticfocus.data.dao;
 import android.database.Cursor;
 import androidx.annotation.NonNull;
 import androidx.room.CoroutinesRoom;
+import androidx.room.EntityDeletionOrUpdateAdapter;
 import androidx.room.EntityInsertionAdapter;
 import androidx.room.RoomDatabase;
 import androidx.room.RoomSQLiteQuery;
@@ -33,7 +34,11 @@ public final class TaskTemplateDao_Impl implements TaskTemplateDao {
 
   private final EntityInsertionAdapter<TaskTemplateEntity> __insertionAdapterOfTaskTemplateEntity;
 
+  private final EntityDeletionOrUpdateAdapter<TaskTemplateEntity> __updateAdapterOfTaskTemplateEntity;
+
   private final SharedSQLiteStatement __preparedStmtOfDeleteById;
+
+  private final SharedSQLiteStatement __preparedStmtOfDeleteByDomainId;
 
   public TaskTemplateDao_Impl(@NonNull final RoomDatabase __db) {
     this.__db = __db;
@@ -59,11 +64,42 @@ public final class TaskTemplateDao_Impl implements TaskTemplateDao {
         statement.bindLong(6, entity.getDefaultPomodoros());
       }
     };
+    this.__updateAdapterOfTaskTemplateEntity = new EntityDeletionOrUpdateAdapter<TaskTemplateEntity>(__db) {
+      @Override
+      @NonNull
+      protected String createQuery() {
+        return "UPDATE OR ABORT `task_templates` SET `id` = ?,`title` = ?,`note` = ?,`domainId` = ?,`storyPoints` = ?,`defaultPomodoros` = ? WHERE `id` = ?";
+      }
+
+      @Override
+      protected void bind(@NonNull final SupportSQLiteStatement statement,
+          @NonNull final TaskTemplateEntity entity) {
+        statement.bindString(1, entity.getId());
+        statement.bindString(2, entity.getTitle());
+        if (entity.getNote() == null) {
+          statement.bindNull(3);
+        } else {
+          statement.bindString(3, entity.getNote());
+        }
+        statement.bindString(4, entity.getDomainId());
+        statement.bindLong(5, entity.getStoryPoints());
+        statement.bindLong(6, entity.getDefaultPomodoros());
+        statement.bindString(7, entity.getId());
+      }
+    };
     this.__preparedStmtOfDeleteById = new SharedSQLiteStatement(__db) {
       @Override
       @NonNull
       public String createQuery() {
         final String _query = "DELETE FROM task_templates WHERE id = ?";
+        return _query;
+      }
+    };
+    this.__preparedStmtOfDeleteByDomainId = new SharedSQLiteStatement(__db) {
+      @Override
+      @NonNull
+      public String createQuery() {
+        final String _query = "DELETE FROM task_templates WHERE domainId = ?";
         return _query;
       }
     };
@@ -79,6 +115,25 @@ public final class TaskTemplateDao_Impl implements TaskTemplateDao {
         __db.beginTransaction();
         try {
           __insertionAdapterOfTaskTemplateEntity.insert(template);
+          __db.setTransactionSuccessful();
+          return Unit.INSTANCE;
+        } finally {
+          __db.endTransaction();
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object update(final TaskTemplateEntity template,
+      final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        __db.beginTransaction();
+        try {
+          __updateAdapterOfTaskTemplateEntity.handle(template);
           __db.setTransactionSuccessful();
           return Unit.INSTANCE;
         } finally {
@@ -108,6 +163,32 @@ public final class TaskTemplateDao_Impl implements TaskTemplateDao {
           }
         } finally {
           __preparedStmtOfDeleteById.release(_stmt);
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object deleteByDomainId(final String domainId,
+      final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        final SupportSQLiteStatement _stmt = __preparedStmtOfDeleteByDomainId.acquire();
+        int _argIndex = 1;
+        _stmt.bindString(_argIndex, domainId);
+        try {
+          __db.beginTransaction();
+          try {
+            _stmt.executeUpdateDelete();
+            __db.setTransactionSuccessful();
+            return Unit.INSTANCE;
+          } finally {
+            __db.endTransaction();
+          }
+        } finally {
+          __preparedStmtOfDeleteByDomainId.release(_stmt);
         }
       }
     }, $completion);

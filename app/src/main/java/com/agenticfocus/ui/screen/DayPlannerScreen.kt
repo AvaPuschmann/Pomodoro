@@ -32,6 +32,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -50,6 +52,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
@@ -73,7 +76,6 @@ import com.agenticfocus.viewmodel.LibraryViewModel
 import kotlinx.coroutines.launch
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
-import androidx.compose.material3.Icon
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,8 +87,24 @@ fun DayPlannerScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val libraryState by libraryViewModel.state.collectAsStateWithLifecycle()
     val lazyListState = rememberLazyListState()
+
+    // Split tasks: active vs done
+    val activeTasks = state.tasks.filter {
+        it.plannedPomodoros == 0 || it.completedPomodoros < it.plannedPomodoros
+    }
+    val doneTasks = state.tasks.filter {
+        it.plannedPomodoros > 0 && it.completedPomodoros >= it.plannedPomodoros
+    }
+
+    // Reorder maps LazyColumn index (active-only list) → original state.tasks index
     val reorderableState = rememberReorderableLazyListState(lazyListState) { from, to ->
-        viewModel.reorderTasks(from.index, to.index)
+        if (from.index < activeTasks.size && to.index < activeTasks.size) {
+            val fromId = activeTasks[from.index].id
+            val toId = activeTasks[to.index].id
+            val fromIdx = state.tasks.indexOfFirst { it.id == fromId }
+            val toIdx = state.tasks.indexOfFirst { it.id == toId }
+            if (fromIdx >= 0 && toIdx >= 0) viewModel.reorderTasks(fromIdx, toIdx)
+        }
     }
 
     var newTaskText by remember { mutableStateOf("") }
@@ -136,7 +154,8 @@ fun DayPlannerScreen(
                 state = lazyListState,
                 modifier = Modifier.weight(1f)
             ) {
-                itemsIndexed(state.tasks, key = { _, task -> task.id }) { _, task ->
+                // ── Section active ─────────────────────────────────────────
+                itemsIndexed(activeTasks, key = { _, task -> task.id }) { _, task ->
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { value ->
                             if (value == SwipeToDismissBoxValue.StartToEnd) {
@@ -175,6 +194,84 @@ fun DayPlannerScreen(
                                         task = task,
                                         isActive = task.id == state.activeTaskId,
                                         dragHandleModifier = Modifier.draggableHandle(),
+                                        onPlay = { viewModel.activateTask(task) },
+                                        onIncreasePlanned = { viewModel.updatePlanned(task.id, +1) },
+                                        onDecreasePlanned = { viewModel.updatePlanned(task.id, -1) },
+                                        onNameChange = { viewModel.updateName(task.id, it) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ── Section "Terminées" ─────────────────────────────────────
+                if (doneTasks.isNotEmpty()) {
+                    item(key = "done_section_header") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = Color.White.copy(alpha = 0.20f)
+                            )
+                            Text(
+                                text = "Terminées (${doneTasks.size})",
+                                color = SubtleWhite,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = Color.White.copy(alpha = 0.20f)
+                            )
+                        }
+                    }
+
+                    items(doneTasks, key = { it.id }) { task ->
+                        val dismissState = rememberSwipeToDismissBoxState(
+                            confirmValueChange = { value ->
+                                if (value == SwipeToDismissBoxValue.StartToEnd) {
+                                    viewModel.removeTask(task.id)
+                                    true
+                                } else false
+                            }
+                        )
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            backgroundContent = {
+                                if (dismissState.targetValue != SwipeToDismissBoxValue.Settled) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(TomatoRed)
+                                            .padding(start = 16.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Text("Supprimer", color = Color.White, fontSize = 14.sp)
+                                    }
+                                }
+                            }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    .alpha(0.55f)
+                            ) {
+                                Surface(
+                                    color = Color.Black.copy(alpha = 0.50f),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                                ) {
+                                    DayTaskRow(
+                                        task = task,
+                                        isActive = false,
+                                        dragHandleModifier = Modifier,
+                                        showDragHandle = false,
                                         onPlay = { viewModel.activateTask(task) },
                                         onIncreasePlanned = { viewModel.updatePlanned(task.id, +1) },
                                         onDecreasePlanned = { viewModel.updatePlanned(task.id, -1) },

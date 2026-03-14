@@ -17,6 +17,8 @@ import com.agenticfocus.data.dao.DomainDao;
 import com.agenticfocus.data.dao.DomainDao_Impl;
 import com.agenticfocus.data.dao.PomodoroSessionDao;
 import com.agenticfocus.data.dao.PomodoroSessionDao_Impl;
+import com.agenticfocus.data.dao.StatsDao;
+import com.agenticfocus.data.dao.StatsDao_Impl;
 import com.agenticfocus.data.dao.TaskTemplateDao;
 import com.agenticfocus.data.dao.TaskTemplateDao_Impl;
 import java.lang.Class;
@@ -41,6 +43,8 @@ public final class AppDatabase_Impl extends AppDatabase {
   private volatile DomainDao _domainDao;
 
   private volatile TaskTemplateDao _taskTemplateDao;
+
+  private volatile StatsDao _statsDao;
 
   @Override
   @NonNull
@@ -212,6 +216,7 @@ public final class AppDatabase_Impl extends AppDatabase {
     _typeConvertersMap.put(PomodoroSessionDao.class, PomodoroSessionDao_Impl.getRequiredConverters());
     _typeConvertersMap.put(DomainDao.class, DomainDao_Impl.getRequiredConverters());
     _typeConvertersMap.put(TaskTemplateDao.class, TaskTemplateDao_Impl.getRequiredConverters());
+    _typeConvertersMap.put(StatsDao.class, StatsDao_Impl.getRequiredConverters());
     return _typeConvertersMap;
   }
 
@@ -282,6 +287,20 @@ public final class AppDatabase_Impl extends AppDatabase {
           _taskTemplateDao = new TaskTemplateDao_Impl(this);
         }
         return _taskTemplateDao;
+      }
+    }
+  }
+
+  @Override
+  public StatsDao statsDao() {
+    if (_statsDao != null) {
+      return _statsDao;
+    } else {
+      synchronized(this) {
+        if(_statsDao == null) {
+          _statsDao = new StatsDao_Impl(this);
+        }
+        return _statsDao;
       }
     }
   }

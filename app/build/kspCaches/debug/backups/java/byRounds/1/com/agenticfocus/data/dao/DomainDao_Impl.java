@@ -4,6 +4,7 @@ import android.database.Cursor;
 import android.os.CancellationSignal;
 import androidx.annotation.NonNull;
 import androidx.room.CoroutinesRoom;
+import androidx.room.EntityDeletionOrUpdateAdapter;
 import androidx.room.EntityInsertionAdapter;
 import androidx.room.RoomDatabase;
 import androidx.room.RoomSQLiteQuery;
@@ -35,6 +36,10 @@ public final class DomainDao_Impl implements DomainDao {
 
   private final EntityInsertionAdapter<DomainEntity> __insertionAdapterOfDomainEntity;
 
+  private final EntityInsertionAdapter<DomainEntity> __insertionAdapterOfDomainEntity_1;
+
+  private final EntityDeletionOrUpdateAdapter<DomainEntity> __updateAdapterOfDomainEntity;
+
   private final SharedSQLiteStatement __preparedStmtOfDeleteById;
 
   public DomainDao_Impl(@NonNull final RoomDatabase __db) {
@@ -52,6 +57,37 @@ public final class DomainDao_Impl implements DomainDao {
         statement.bindString(1, entity.getId());
         statement.bindString(2, entity.getName());
         statement.bindString(3, entity.getColor());
+      }
+    };
+    this.__insertionAdapterOfDomainEntity_1 = new EntityInsertionAdapter<DomainEntity>(__db) {
+      @Override
+      @NonNull
+      protected String createQuery() {
+        return "INSERT OR REPLACE INTO `domains` (`id`,`name`,`color`) VALUES (?,?,?)";
+      }
+
+      @Override
+      protected void bind(@NonNull final SupportSQLiteStatement statement,
+          @NonNull final DomainEntity entity) {
+        statement.bindString(1, entity.getId());
+        statement.bindString(2, entity.getName());
+        statement.bindString(3, entity.getColor());
+      }
+    };
+    this.__updateAdapterOfDomainEntity = new EntityDeletionOrUpdateAdapter<DomainEntity>(__db) {
+      @Override
+      @NonNull
+      protected String createQuery() {
+        return "UPDATE OR ABORT `domains` SET `id` = ?,`name` = ?,`color` = ? WHERE `id` = ?";
+      }
+
+      @Override
+      protected void bind(@NonNull final SupportSQLiteStatement statement,
+          @NonNull final DomainEntity entity) {
+        statement.bindString(1, entity.getId());
+        statement.bindString(2, entity.getName());
+        statement.bindString(3, entity.getColor());
+        statement.bindString(4, entity.getId());
       }
     };
     this.__preparedStmtOfDeleteById = new SharedSQLiteStatement(__db) {
@@ -74,6 +110,42 @@ public final class DomainDao_Impl implements DomainDao {
         __db.beginTransaction();
         try {
           __insertionAdapterOfDomainEntity.insert(domains);
+          __db.setTransactionSuccessful();
+          return Unit.INSTANCE;
+        } finally {
+          __db.endTransaction();
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object insert(final DomainEntity domain, final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        __db.beginTransaction();
+        try {
+          __insertionAdapterOfDomainEntity_1.insert(domain);
+          __db.setTransactionSuccessful();
+          return Unit.INSTANCE;
+        } finally {
+          __db.endTransaction();
+        }
+      }
+    }, $completion);
+  }
+
+  @Override
+  public Object update(final DomainEntity domain, final Continuation<? super Unit> $completion) {
+    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
+      @Override
+      @NonNull
+      public Unit call() throws Exception {
+        __db.beginTransaction();
+        try {
+          __updateAdapterOfDomainEntity.handle(domain);
           __db.setTransactionSuccessful();
           return Unit.INSTANCE;
         } finally {

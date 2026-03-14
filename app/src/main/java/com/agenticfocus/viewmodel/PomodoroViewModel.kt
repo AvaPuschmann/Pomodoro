@@ -56,6 +56,10 @@ class PomodoroViewModel(application: Application) : AndroidViewModel(application
         getApplication<Application>().startService(intent)
     }
 
+    fun completeEarly() {
+        sendIntent(TimerService.ACTION_COMPLETE_EARLY)
+    }
+
     fun increasePlanned() = sendPlannedDelta(+1)
     fun decreasePlanned() = sendPlannedDelta(-1)
 

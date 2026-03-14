@@ -10,6 +10,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
@@ -29,14 +30,17 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.agenticfocus.ui.screen.DayPlannerScreen
 import com.agenticfocus.ui.screen.LibraryScreen
 import com.agenticfocus.ui.screen.PomodoroScreen
+import com.agenticfocus.ui.screen.StatsScreen
 import com.agenticfocus.ui.theme.AgenticFocusTheme
 import com.agenticfocus.viewmodel.DayPlannerViewModel
 import com.agenticfocus.viewmodel.LibraryViewModel
+import com.agenticfocus.viewmodel.StatsViewModel
 
 private enum class Tab(val label: String, val icon: ImageVector) {
     TIMER("Timer", Icons.Filled.PlayArrow),
     PLANNER("Planner", Icons.Default.List),
-    LIBRARY("Biblio", Icons.Default.MenuBook)   // material-icons-extended
+    LIBRARY("Biblio", Icons.Default.MenuBook),
+    STATS("Stats", Icons.Default.BarChart)
 }
 
 class MainActivity : ComponentActivity() {
@@ -62,6 +66,7 @@ class MainActivity : ComponentActivity() {
 
                 val dayPlannerVM: DayPlannerViewModel = viewModel()
                 val libraryVM: LibraryViewModel = viewModel()
+                val statsVM: StatsViewModel = viewModel()
                 var selectedTab by remember { mutableStateOf(Tab.TIMER) }
 
                 LaunchedEffect(Unit) {
@@ -88,6 +93,7 @@ class MainActivity : ComponentActivity() {
                         Tab.TIMER    -> PomodoroScreen(contentPadding = innerPadding)
                         Tab.PLANNER  -> DayPlannerScreen(dayPlannerVM, libraryVM, contentPadding = innerPadding)
                         Tab.LIBRARY  -> LibraryScreen(libraryVM, contentPadding = innerPadding)
+                        Tab.STATS    -> StatsScreen(statsVM, contentPadding = innerPadding)
                     }
                 }
             }

@@ -1,5 +1,6 @@
 package com.agenticfocus.ui.screen
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,7 +12,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -30,6 +33,7 @@ import com.agenticfocus.ui.components.SessionButtons
 import com.agenticfocus.ui.components.TaskInput
 import com.agenticfocus.ui.components.TimerDial
 import com.agenticfocus.ui.components.TomatoPlanner
+import com.agenticfocus.ui.theme.TextWhite
 import com.agenticfocus.viewmodel.Phase
 import com.agenticfocus.viewmodel.PomodoroViewModel
 
@@ -124,6 +128,18 @@ fun PomodoroScreen(
                     if (state.isRunning) viewModel.pauseTimer() else viewModel.startTimer()
                 }
             )
+
+            // Early completion — visible only when running in FOCUS phase
+            if (state.isRunning && state.phase == Phase.FOCUS) {
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedButton(
+                    onClick = viewModel::completeEarly,
+                    border = BorderStroke(1.dp, TextWhite.copy(alpha = 0.6f)),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextWhite)
+                ) {
+                    Text("✓ Valider ce pomodoro")
+                }
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
         }

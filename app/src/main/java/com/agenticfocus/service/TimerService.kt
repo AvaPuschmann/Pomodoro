@@ -38,6 +38,7 @@ class TimerService : Service() {
         const val EXTRA_TASK_NAME = "extra_task_name"
         const val EXTRA_PLANNED_DELTA = "planned_delta"   // Int: +1 or -1
         const val ACTION_ACTIVATE_TASK      = "com.agenticfocus.ACTIVATE_TASK"
+        const val ACTION_COMPLETE_EARLY     = "com.agenticfocus.COMPLETE_EARLY"
         const val EXTRA_TASK_ID             = "extra_task_id"
         const val EXTRA_PLANNED_POMODOROS   = "extra_planned_pomodoros"
         // Note: EXTRA_TASK_NAME already declared above at line 38 — do NOT redeclare
@@ -108,6 +109,15 @@ class TimerService : Service() {
                     plannedPomodoros = (current + delta).coerceIn(minPlanned, 6)
                 )
                 // updateNotification() not called — notification does not display plannedPomodoros
+            }
+            ACTION_COMPLETE_EARLY -> {
+                val s = _timerState.value
+                if (s.phase == Phase.FOCUS && s.isRunning) {
+                    tickJob?.cancel()
+                    tickJob = null
+                    pausedRemaining = 0
+                    serviceScope.launch { onSessionComplete() }
+                }
             }
             ACTION_ACTIVATE_TASK -> {
                 val taskId  = intent.getStringExtra(EXTRA_TASK_ID) ?: ""
@@ -248,11 +258,22 @@ class TimerService : Service() {
         }
 
         // Increment counter and auto-advance phase
-        val newCount = currentState.completedPomodoros + 1
+        val newCount = if (currentState.phase == Phase.FOCUS)
+            currentState.completedPomodoros + 1
+        else
+            currentState.completedPomodoros
         val nextPhase = if (currentState.phase == Phase.FOCUS) {
             if (newCount % 4 == 0) Phase.LONG_BREAK else Phase.SHORT_BREAK
         } else {
             Phase.FOCUS
+        }
+
+        // Auto-chain: active for tasks with multiple pomodoros
+        val shouldAutoChain = currentState.plannedPomodoros > 1 && when {
+            currentState.phase == Phase.FOCUS ->
+                newCount < currentState.plannedPomodoros  // more FOCUS sessions remain after this break
+            else ->
+                currentState.completedPomodoros < currentState.plannedPomodoros  // more FOCUS sessions remain
         }
 
         // Play pause announcement when transitioning to short break (5 min)
@@ -291,9 +312,15 @@ class TimerService : Service() {
             totalSeconds = nextPhase.durationSeconds,
             remainingSeconds = nextPhase.durationSeconds,
             isRunning = false,
-            completedPomodoros = if (currentState.phase == Phase.FOCUS) newCount else currentState.completedPomodoros
+            completedPomodoros = newCount
         )
         updateNotification()
+
+        // Auto-chain: wait for sounds to finish, then start next phase
+        if (shouldAutoChain) {
+            delay(1500L)
+            handleStart()
+        }
     }
 
     /** Non-blocking milestone alert — resolves sound file by name from res/raw/. */

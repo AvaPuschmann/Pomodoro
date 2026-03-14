@@ -3,6 +3,8 @@ package com.agenticfocus.ui.screen
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.AlertDialog
@@ -61,11 +64,21 @@ import androidx.core.graphics.toColorInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.agenticfocus.R
 import com.agenticfocus.data.entity.DomainEntity
+import com.agenticfocus.data.entity.TaskTemplateEntity
 import com.agenticfocus.ui.theme.GlassWhite
 import com.agenticfocus.ui.theme.SubtleWhite
 import com.agenticfocus.ui.theme.TextWhite
 import com.agenticfocus.ui.theme.TomatoRed
 import com.agenticfocus.viewmodel.LibraryViewModel
+
+// Palette de couleurs proposées pour les domaines
+private val domainColorPalette = listOf(
+    "#F44336", "#E91E63", "#9C27B0", "#673AB7",
+    "#3F51B5", "#2196F3", "#03A9F4", "#00BCD4",
+    "#009688", "#4CAF50", "#8BC34A", "#CDDC39",
+    "#FFC107", "#FF9800", "#FF5722", "#795548",
+    "#66BB6A", "#26A69A", "#42A5F5", "#AB47BC"
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,8 +87,10 @@ fun LibraryScreen(
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    var showAddDialog by rememberSaveable { mutableStateOf(false) }
-    // Track which domains are expanded
+    var showAddTemplateDialog by rememberSaveable { mutableStateOf(false) }
+    var showAddDomainDialog by rememberSaveable { mutableStateOf(false) }
+    var editingDomain by remember { mutableStateOf<DomainEntity?>(null) }
+    var editingTemplate by remember { mutableStateOf<TaskTemplateEntity?>(null) }
     val expandedDomains = remember { mutableStateOf(setOf<String>()) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -105,11 +120,22 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Ma Bibliothèque", color = TextWhite, fontSize = 18.sp)
-                Text(
-                    "${state.templatesByDomain.values.sumOf { it.size }} tâches",
-                    color = SubtleWhite,
-                    fontSize = 14.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${state.templatesByDomain.values.sumOf { it.size }} tâches",
+                        color = SubtleWhite,
+                        fontSize = 14.sp
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = { showAddDomainDialog = true }) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Ajouter un domaine",
+                            tint = SubtleWhite,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
 
             LazyColumn(
@@ -136,7 +162,6 @@ fun LibraryScreen(
                                     .padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Domain color dot
                                 val dotColor = remember(domain.color) {
                                     runCatching { Color(domain.color.toColorInt()) }
                                         .getOrDefault(Color.Gray)
@@ -159,6 +184,17 @@ fun LibraryScreen(
                                     color = SubtleWhite,
                                     fontSize = 13.sp
                                 )
+                                IconButton(
+                                    onClick = { editingDomain = domain },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.Edit,
+                                        contentDescription = "Modifier",
+                                        tint = SubtleWhite,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
                                 IconButton(onClick = {
                                     expandedDomains.value = if (isExpanded)
                                         expandedDomains.value - domain.id
@@ -179,7 +215,7 @@ fun LibraryScreen(
                                     Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(start = 32.dp, end = 12.dp, bottom = 8.dp),
+                                            .padding(start = 32.dp, end = 4.dp, bottom = 8.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column(modifier = Modifier.weight(1f)) {
@@ -208,6 +244,17 @@ fun LibraryScreen(
                                             fontSize = 12.sp
                                         )
                                         IconButton(
+                                            onClick = { editingTemplate = template },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Edit,
+                                                contentDescription = "Modifier",
+                                                tint = SubtleWhite,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        IconButton(
                                             onClick = { viewModel.deleteTemplate(template.id) },
                                             modifier = Modifier.size(32.dp)
                                         ) {
@@ -215,7 +262,7 @@ fun LibraryScreen(
                                                 Icons.Default.Delete,
                                                 contentDescription = "Supprimer",
                                                 tint = TomatoRed,
-                                                modifier = Modifier.size(18.dp)
+                                                modifier = Modifier.size(16.dp)
                                             )
                                         }
                                     }
@@ -224,13 +271,13 @@ fun LibraryScreen(
                         }
                     }
                 }
-                item { Spacer(Modifier.height(80.dp)) } // FAB clearance
+                item { Spacer(Modifier.height(80.dp)) }
             }
         }
 
-        // FAB
+        // FAB — ajouter une tâche
         FloatingActionButton(
-            onClick = { showAddDialog = true },
+            onClick = { showAddTemplateDialog = true },
             containerColor = TomatoRed,
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -243,31 +290,208 @@ fun LibraryScreen(
         }
     }
 
-    // Add template dialog
-    if (showAddDialog) {
-        AddTemplateDialog(
+    // Dialog : nouvelle tâche
+    if (showAddTemplateDialog) {
+        TemplateDialog(
             domains = state.domains,
+            initial = null,
             onConfirm = { title, note, domainId, points, pomodoros ->
                 viewModel.addTemplate(title, note, domainId, points, pomodoros)
-                showAddDialog = false
+                showAddTemplateDialog = false
             },
-            onDismiss = { showAddDialog = false }
+            onDismiss = { showAddTemplateDialog = false }
+        )
+    }
+
+    // Dialog : éditer une tâche
+    editingTemplate?.let { template ->
+        TemplateDialog(
+            domains = state.domains,
+            initial = template,
+            onConfirm = { title, note, domainId, points, pomodoros ->
+                viewModel.updateTemplate(template.id, title, note, domainId, points, pomodoros)
+                editingTemplate = null
+            },
+            onDismiss = { editingTemplate = null }
+        )
+    }
+
+    // Dialog : nouveau domaine
+    if (showAddDomainDialog) {
+        DomainDialog(
+            initial = null,
+            onConfirm = { name, color ->
+                viewModel.addDomain(name, color)
+                showAddDomainDialog = false
+            },
+            onDismiss = { showAddDomainDialog = false }
+        )
+    }
+
+    // Dialog : éditer domaine
+    editingDomain?.let { domain ->
+        val templateCount = state.templatesByDomain[domain.id]?.size ?: 0
+        DomainDialog(
+            initial = domain,
+            onConfirm = { name, color ->
+                viewModel.updateDomain(domain.id, name, color)
+                editingDomain = null
+            },
+            onDelete = {
+                viewModel.deleteDomain(domain.id)
+                editingDomain = null
+            },
+            templateCount = templateCount,
+            onDismiss = { editingDomain = null }
         )
     }
 }
 
+@Composable
+private fun DomainDialog(
+    initial: DomainEntity?,
+    onConfirm: (name: String, color: String) -> Unit,
+    onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+    templateCount: Int = 0
+) {
+    var name by remember { mutableStateOf(initial?.name ?: "") }
+    var selectedColor by remember {
+        mutableStateOf(
+            if (initial != null) initial.color
+            else domainColorPalette.first()
+        )
+    }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            containerColor = Color(0xFF1A1A1A),
+            title = { Text("Supprimer le domaine ?", color = TextWhite) },
+            text = {
+                val msg = if (templateCount > 0)
+                    "Ce domaine contient $templateCount tâche(s) qui seront également supprimées."
+                else
+                    "Cette action est irréversible."
+                Text(msg, color = SubtleWhite)
+            },
+            confirmButton = {
+                TextButton(onClick = { onDelete?.invoke() }) {
+                    Text("Supprimer", color = TomatoRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Annuler", color = SubtleWhite)
+                }
+            }
+        )
+        return
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1A1A1A),
+        title = {
+            Text(
+                if (initial == null) "Nouveau domaine" else "Modifier le domaine",
+                color = TextWhite
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nom *", color = SubtleWhite) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = TomatoRed,
+                        unfocusedBorderColor = GlassWhite,
+                        focusedContainerColor = Color.Black.copy(alpha = 0.6f),
+                        unfocusedContainerColor = Color.Black.copy(alpha = 0.6f),
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        cursorColor = TomatoRed
+                    ),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Text("Couleur", color = SubtleWhite, fontSize = 13.sp)
+                // Color grid — 4 columns
+                val chunked = domainColorPalette.chunked(4)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    chunked.forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { hex ->
+                                val c = remember(hex) {
+                                    runCatching { Color(hex.toColorInt()) }.getOrDefault(Color.Gray)
+                                }
+                                val isSelected = hex == selectedColor
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(c, CircleShape)
+                                        .then(
+                                            if (isSelected) Modifier.border(
+                                                2.dp, Color.White, CircleShape
+                                            ) else Modifier
+                                        )
+                                        .clickable { selectedColor = hex }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (name.isNotBlank()) onConfirm(name.trim(), selectedColor)
+                }
+            ) { Text(if (initial == null) "Ajouter" else "Enregistrer", color = TomatoRed) }
+        },
+        dismissButton = {
+            Row {
+                if (onDelete != null) {
+                    TextButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = null,
+                            tint = TomatoRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text("Supprimer", color = TomatoRed)
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text("Annuler", color = SubtleWhite) }
+            }
+        }
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddTemplateDialog(
+private fun TemplateDialog(
     domains: List<DomainEntity>,
+    initial: TaskTemplateEntity?,
     onConfirm: (title: String, note: String?, domainId: String, storyPoints: Int, defaultPomodoros: Int) -> Unit,
     onDismiss: () -> Unit
 ) {
-    var title by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
-    var selectedDomain by remember { mutableStateOf(domains.firstOrNull()) }
-    var storyPoints by remember { mutableIntStateOf(20) }
-    var defaultPomodoros by remember { mutableIntStateOf(1) }
+    var title by remember { mutableStateOf(initial?.title ?: "") }
+    var note by remember { mutableStateOf(initial?.note ?: "") }
+    var selectedDomain by remember {
+        mutableStateOf(
+            if (initial != null) domains.find { it.id == initial.domainId } ?: domains.firstOrNull()
+            else domains.firstOrNull()
+        )
+    }
+    var storyPoints by remember { mutableIntStateOf(initial?.storyPoints ?: 20) }
+    var defaultPomodoros by remember { mutableIntStateOf(initial?.defaultPomodoros ?: 1) }
     var domainMenuExpanded by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
@@ -284,7 +508,7 @@ private fun AddTemplateDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = Color(0xFF1A1A1A),
-        title = { Text("Nouvelle tâche", color = TextWhite) },
+        title = { Text(if (initial == null) "Nouvelle tâche" else "Modifier la tâche", color = TextWhite) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -305,7 +529,6 @@ private fun AddTemplateDialog(
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth()
                 )
-                // Domain picker
                 ExposedDropdownMenuBox(
                     expanded = domainMenuExpanded,
                     onExpandedChange = { domainMenuExpanded = it }
@@ -334,7 +557,6 @@ private fun AddTemplateDialog(
                         }
                     }
                 }
-                // Story points + pomodoros
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = storyPoints.toString(),
@@ -371,7 +593,7 @@ private fun AddTemplateDialog(
                         onConfirm(title.trim(), note.takeIf { it.isNotBlank() }, selectedDomain!!.id, storyPoints, defaultPomodoros)
                     }
                 }
-            ) { Text("Ajouter", color = TomatoRed) }
+            ) { Text(if (initial == null) "Ajouter" else "Enregistrer", color = TomatoRed) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Annuler", color = SubtleWhite) }

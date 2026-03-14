@@ -57,7 +57,38 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         }
     }
 
+    fun updateTemplate(
+        id: String,
+        title: String,
+        note: String?,
+        domainId: String,
+        storyPoints: Int,
+        defaultPomodoros: Int
+    ) {
+        viewModelScope.launch {
+            repository.updateTemplate(
+                TaskTemplateEntity(id, title, note?.takeIf { it.isNotBlank() }, domainId, storyPoints, defaultPomodoros)
+            )
+        }
+    }
+
     fun deleteTemplate(id: String) {
         viewModelScope.launch { repository.deleteTemplate(id) }
+    }
+
+    fun addDomain(name: String, color: String) {
+        viewModelScope.launch { repository.addDomain(name, color) }
+    }
+
+    fun updateDomain(id: String, name: String, color: String) {
+        viewModelScope.launch {
+            repository.updateDomain(
+                com.agenticfocus.data.entity.DomainEntity(id, name, color)
+            )
+        }
+    }
+
+    fun deleteDomain(id: String) {
+        viewModelScope.launch { repository.deleteDomain(id) }
     }
 }

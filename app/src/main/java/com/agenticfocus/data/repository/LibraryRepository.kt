@@ -50,5 +50,18 @@ class LibraryRepository(
         )
     }
 
+    suspend fun updateTemplate(template: TaskTemplateEntity) = templateDao.update(template)
+
     suspend fun deleteTemplate(id: String) = templateDao.deleteById(id)
+
+    suspend fun addDomain(name: String, color: String) {
+        domainDao.insert(DomainEntity(UUID.randomUUID().toString(), name, color))
+    }
+
+    suspend fun updateDomain(domain: DomainEntity) = domainDao.update(domain)
+
+    suspend fun deleteDomain(id: String) {
+        templateDao.deleteByDomainId(id)
+        domainDao.deleteById(id)
+    }
 }
