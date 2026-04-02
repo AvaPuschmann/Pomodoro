@@ -26,6 +26,12 @@ interface DomainDao {
     @Update
     suspend fun update(domain: DomainEntity)
 
+    @Query("SELECT updated_at FROM domains WHERE id = :id")
+    suspend fun getUpdatedAtById(id: String): Long?
+
     @Query("DELETE FROM domains WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM domains")
+    suspend fun deleteAll()
 }

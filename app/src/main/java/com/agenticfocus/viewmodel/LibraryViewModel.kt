@@ -7,6 +7,7 @@ import com.agenticfocus.data.db.AppDatabase
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
 import com.agenticfocus.data.repository.LibraryRepository
+import com.agenticfocus.data.sync.SyncEngine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -29,7 +30,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         repository.domains,
         repository.templates
     ) { domains, templates ->
-        val byDomain = templates.groupBy { it.domainId }
+        val domainIds = domains.map { it.id }.toSet()
+        val validTemplates = templates.filter { it.domainId in domainIds }
+        val byDomain = validTemplates.groupBy { it.domainId }
         LibraryState(domains = domains, templatesByDomain = byDomain)
     }.stateIn(
         scope = viewModelScope,
@@ -39,7 +42,9 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         viewModelScope.launch {
-            if (repository.domainCount() == 0) {
+            // Insert defaults only for new unauthenticated users.
+            // Authenticated users get domains from Supabase via pullSync.
+            if (repository.domainCount() == 0 && SyncEngine.currentUserId.isEmpty()) {
                 repository.insertDefaultDomains()
             }
         }
@@ -50,10 +55,13 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         note: String?,
         domainId: String,
         storyPoints: Int,
-        defaultPomodoros: Int
+        defaultPomodoros: Int,
+        impact: String? = null,
+        urgency: String? = null,
+        dueDate: Long? = null
     ) {
         viewModelScope.launch {
-            repository.addTemplate(title, note, domainId, storyPoints, defaultPomodoros)
+            repository.addTemplate(title, note, domainId, storyPoints, defaultPomodoros, impact, urgency, dueDate)
         }
     }
 
@@ -63,11 +71,17 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         note: String?,
         domainId: String,
         storyPoints: Int,
-        defaultPomodoros: Int
+        defaultPomodoros: Int,
+        impact: String? = null,
+        urgency: String? = null,
+        dueDate: Long? = null
     ) {
         viewModelScope.launch {
             repository.updateTemplate(
-                TaskTemplateEntity(id, title, note?.takeIf { it.isNotBlank() }, domainId, storyPoints, defaultPomodoros)
+                TaskTemplateEntity(
+                    id, title, note?.takeIf { it.isNotBlank() }, domainId, storyPoints, defaultPomodoros,
+                    impact = impact, urgency = urgency, dueDate = dueDate
+                )
             )
         }
     }

@@ -5,6 +5,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,11 +32,14 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -42,9 +47,11 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -65,6 +72,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.agenticfocus.R
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
+import com.agenticfocus.ui.components.ToggleChip
+import com.agenticfocus.ui.components.formatDueDate
 import com.agenticfocus.ui.theme.GlassWhite
 import com.agenticfocus.ui.theme.SubtleWhite
 import com.agenticfocus.ui.theme.TextWhite
@@ -120,22 +129,11 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Ma Bibliothèque", color = TextWhite, fontSize = 18.sp)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "${state.templatesByDomain.values.sumOf { it.size }} tâches",
-                        color = SubtleWhite,
-                        fontSize = 14.sp
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = { showAddDomainDialog = true }) {
-                        Icon(
-                            Icons.Default.Add,
-                            contentDescription = "Ajouter un domaine",
-                            tint = SubtleWhite,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
+                Text(
+                    "${state.templatesByDomain.values.sumOf { it.size }} tâches",
+                    color = SubtleWhite,
+                    fontSize = 14.sp
+                )
             }
 
             LazyColumn(
@@ -275,18 +273,50 @@ fun LibraryScreen(
             }
         }
 
-        // FAB — ajouter une tâche
-        FloatingActionButton(
-            onClick = { showAddTemplateDialog = true },
-            containerColor = TomatoRed,
+        // Bottom action bar — deux boutons labellisés
+        Row(
             modifier = Modifier
-                .align(Alignment.BottomEnd)
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
                 .padding(
+                    start = 16.dp,
                     end = 16.dp,
-                    bottom = contentPadding.calculateBottomPadding() + 16.dp
-                )
+                    bottom = contentPadding.calculateBottomPadding() + 12.dp
+                ),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Ajouter", tint = Color.White)
+            Button(
+                onClick = { showAddDomainDialog = true },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFF2196F3)
+                ),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Domaine", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            Button(
+                onClick = { showAddTemplateDialog = true },
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(6.dp))
+                Text("Tâche", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
         }
     }
 
@@ -295,8 +325,8 @@ fun LibraryScreen(
         TemplateDialog(
             domains = state.domains,
             initial = null,
-            onConfirm = { title, note, domainId, points, pomodoros ->
-                viewModel.addTemplate(title, note, domainId, points, pomodoros)
+            onConfirm = { title, note, domainId, points, pomodoros, impact, urgency, dueDate ->
+                viewModel.addTemplate(title, note, domainId, points, pomodoros, impact, urgency, dueDate)
                 showAddTemplateDialog = false
             },
             onDismiss = { showAddTemplateDialog = false }
@@ -308,8 +338,8 @@ fun LibraryScreen(
         TemplateDialog(
             domains = state.domains,
             initial = template,
-            onConfirm = { title, note, domainId, points, pomodoros ->
-                viewModel.updateTemplate(template.id, title, note, domainId, points, pomodoros)
+            onConfirm = { title, note, domainId, points, pomodoros, impact, urgency, dueDate ->
+                viewModel.updateTemplate(template.id, title, note, domainId, points, pomodoros, impact, urgency, dueDate)
                 editingTemplate = null
             },
             onDismiss = { editingTemplate = null }
@@ -479,7 +509,7 @@ private fun DomainDialog(
 private fun TemplateDialog(
     domains: List<DomainEntity>,
     initial: TaskTemplateEntity?,
-    onConfirm: (title: String, note: String?, domainId: String, storyPoints: Int, defaultPomodoros: Int) -> Unit,
+    onConfirm: (title: String, note: String?, domainId: String, storyPoints: Int, defaultPomodoros: Int, impact: String?, urgency: String?, dueDate: Long?) -> Unit,
     onDismiss: () -> Unit
 ) {
     var title by remember { mutableStateOf(initial?.title ?: "") }
@@ -492,7 +522,11 @@ private fun TemplateDialog(
     }
     var storyPoints by remember { mutableIntStateOf(initial?.storyPoints ?: 20) }
     var defaultPomodoros by remember { mutableIntStateOf(initial?.defaultPomodoros ?: 1) }
+    var impact by remember { mutableStateOf(initial?.impact) }
+    var urgency by remember { mutableStateOf(initial?.urgency) }
+    var dueDate by remember { mutableStateOf(initial?.dueDate) }
     var domainMenuExpanded by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
@@ -510,7 +544,10 @@ private fun TemplateDialog(
         containerColor = Color(0xFF1A1A1A),
         title = { Text(if (initial == null) "Nouvelle tâche" else "Modifier la tâche", color = TextWhite) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
@@ -525,8 +562,8 @@ private fun TemplateDialog(
                     onValueChange = { note = it },
                     label = { Text("Note (optionnel)", color = SubtleWhite) },
                     colors = fieldColors,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    minLines = 2,
+                    maxLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
                 ExposedDropdownMenuBox(
@@ -549,10 +586,7 @@ private fun TemplateDialog(
                         domains.forEach { domain ->
                             DropdownMenuItem(
                                 text = { Text(domain.name) },
-                                onClick = {
-                                    selectedDomain = domain
-                                    domainMenuExpanded = false
-                                }
+                                onClick = { selectedDomain = domain; domainMenuExpanded = false }
                             )
                         }
                     }
@@ -564,10 +598,7 @@ private fun TemplateDialog(
                         label = { Text("Points", color = SubtleWhite) },
                         colors = fieldColors,
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Next
-                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
@@ -576,13 +607,44 @@ private fun TemplateDialog(
                         label = { Text("🍅 défaut", color = SubtleWhite) },
                         colors = fieldColors,
                         singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
                         modifier = Modifier.weight(1f)
                     )
+                }
+
+                // Impact
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Impact", color = SubtleWhite, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ToggleChip("↑ Élevé", impact == "high", androidx.compose.ui.graphics.Color(0xFFE53935)) { impact = if (impact == "high") null else "high" }
+                        ToggleChip("↓ Faible", impact == "low", androidx.compose.ui.graphics.Color(0xFF6C6C70)) { impact = if (impact == "low") null else "low" }
+                    }
+                }
+
+                // Urgence
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Urgence", color = SubtleWhite, fontSize = 13.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ToggleChip("⚡ Urgent", urgency == "urgent", androidx.compose.ui.graphics.Color(0xFFFF9800)) { urgency = if (urgency == "urgent") null else "urgent" }
+                        ToggleChip("✓ Pas urgent", urgency == "not_urgent", androidx.compose.ui.graphics.Color(0xFF4CAF50)) { urgency = if (urgency == "not_urgent") null else "not_urgent" }
+                    }
+                }
+
+                // Date limite
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Date limite", color = SubtleWhite, fontSize = 13.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ToggleChip(
+                            label = if (dueDate != null) formatDueDate(dueDate!!) else "Choisir une date",
+                            selected = dueDate != null,
+                            selectedColor = androidx.compose.ui.graphics.Color(0xFF2196F3),
+                            onClick = { showDatePicker = true }
+                        )
+                        if (dueDate != null) {
+                            TextButton(onClick = { dueDate = null }) { Text("×", color = SubtleWhite, fontSize = 16.sp) }
+                        }
+                    }
                 }
             }
         },
@@ -590,7 +652,7 @@ private fun TemplateDialog(
             TextButton(
                 onClick = {
                     if (title.isNotBlank() && selectedDomain != null) {
-                        onConfirm(title.trim(), note.takeIf { it.isNotBlank() }, selectedDomain!!.id, storyPoints, defaultPomodoros)
+                        onConfirm(title.trim(), note.takeIf { it.isNotBlank() }, selectedDomain!!.id, storyPoints, defaultPomodoros, impact, urgency, dueDate)
                     }
                 }
             ) { Text(if (initial == null) "Ajouter" else "Enregistrer", color = TomatoRed) }
@@ -599,4 +661,13 @@ private fun TemplateDialog(
             TextButton(onClick = onDismiss) { Text("Annuler", color = SubtleWhite) }
         }
     )
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = dueDate)
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = { TextButton(onClick = { dueDate = datePickerState.selectedDateMillis; showDatePicker = false }) { Text("OK") } },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Annuler") } }
+        ) { DatePicker(state = datePickerState) }
+    }
 }

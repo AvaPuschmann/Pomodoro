@@ -66,9 +66,9 @@ fun TomatoPlanner(
         ) {
             repeat(totalSlots) { i ->
                 val color = when {
-                    i < completedPomodoros                          -> TomatoRed
-                    i == completedPomodoros && phase == Phase.FOCUS -> TomatoOrange
-                    else                                            -> TomatoGreen
+                    i < completedPomodoros                          -> TomatoGreen   // done
+                    i == completedPomodoros && phase == Phase.FOCUS -> TomatoOrange  // in progress
+                    else                                            -> TomatoRed     // not started
                 }
                 TomatoIcon(color = color, size = 28.dp)
             }

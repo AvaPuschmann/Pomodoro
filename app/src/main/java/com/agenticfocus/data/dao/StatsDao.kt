@@ -14,12 +14,12 @@ interface StatsDao {
 
     @Query("""
         SELECT dt.date as date,
-               SUM(dt.completedPomodoros) as totalPomodoros,
-               SUM(CASE WHEN dt.completedPomodoros > 0
-                        THEN COALESCE(tt.storyPoints, 0)
+               SUM(dt.completed_pomodoros) as totalPomodoros,
+               SUM(CASE WHEN dt.completed_pomodoros > 0
+                        THEN COALESCE(tt.story_points, 0)
                         ELSE 0 END) as totalPoints
         FROM day_tasks dt
-        LEFT JOIN task_templates tt ON dt.templateId = tt.id
+        LEFT JOIN task_templates tt ON dt.template_id = tt.id
         WHERE dt.date >= :fromDate
         GROUP BY dt.date
         ORDER BY dt.date ASC

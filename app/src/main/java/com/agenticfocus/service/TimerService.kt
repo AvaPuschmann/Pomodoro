@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.agenticfocus.MainActivity
 import com.agenticfocus.R
+import com.agenticfocus.data.AppPreferences
 import com.agenticfocus.viewmodel.Phase
 import com.agenticfocus.viewmodel.PomodoroState
 import kotlinx.coroutines.CoroutineScope
@@ -41,13 +42,17 @@ class TimerService : Service() {
         const val ACTION_COMPLETE_EARLY     = "com.agenticfocus.COMPLETE_EARLY"
         const val EXTRA_TASK_ID             = "extra_task_id"
         const val EXTRA_PLANNED_POMODOROS   = "extra_planned_pomodoros"
+        const val EXTRA_AUTO_START          = "extra_auto_start"
         // Note: EXTRA_TASK_NAME already declared above at line 38 — do NOT redeclare
 
         private const val NOTIFICATION_ID = 1001
         private const val TIMER_CHANNEL = "timer_channel"
         private const val TAG = "TimerService"
 
-        /** Maps remaining-time thresholds (seconds) to their res/raw sound file name. */
+        /**
+         * Maps remaining-time thresholds (seconds) to their res/raw sound file name.
+         * The Boolean selector reads the matching AppPreferences property at play time.
+         */
         private val ALERT_SOUNDS = mapOf(
             600 to "tenminutes",
             300 to "fiveminutes",
@@ -104,7 +109,7 @@ class TimerService : Service() {
             ACTION_UPDATE_PLANNED -> {
                 val delta = intent.getIntExtra(EXTRA_PLANNED_DELTA, 0)
                 val current = _timerState.value.plannedPomodoros
-                val minPlanned = _timerState.value.completedPomodoros.coerceAtLeast(1)
+                val minPlanned = _timerState.value.completedPomodoros.coerceAtLeast(0)
                 _timerState.value = _timerState.value.copy(
                     plannedPomodoros = (current + delta).coerceIn(minPlanned, 6)
                 )
@@ -141,6 +146,11 @@ class TimerService : Service() {
                 // stopForeground is a no-op if service was not in foreground (safe, API 31+)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 updateNotification()
+
+                // Auto-start: immediately begin FOCUS session when requested
+                if (intent.getBooleanExtra(EXTRA_AUTO_START, false)) {
+                    handleStart()
+                }
             }
         }
         return START_STICKY
@@ -178,11 +188,23 @@ class TimerService : Service() {
                 // Milestone alerts — FOCUS phase only, once per threshold per session
                 val currentPhase = _timerState.value.phase
                 if (currentPhase == Phase.FOCUS) {
+                    val prefs = AppPreferences(this@TimerService)
                     for ((threshold, soundName) in ALERT_SOUNDS) {
                         if (remaining <= threshold && threshold !in triggeredAlerts) {
-                            Log.d(TAG, "MILESTONE: threshold=$threshold remaining=$remaining → playing $soundName")
                             triggeredAlerts.add(threshold)
-                            playMilestoneAlert(soundName)
+                            val allowed = prefs.soundEnabled && when (threshold) {
+                                600  -> prefs.sound10min
+                                300  -> prefs.sound5min
+                                180  -> prefs.sound3min
+                                60   -> prefs.sound1min
+                                else -> true
+                            }
+                            if (allowed) {
+                                Log.d(TAG, "MILESTONE: threshold=$threshold remaining=$remaining → playing $soundName")
+                                playMilestoneAlert(soundName)
+                            } else {
+                                Log.d(TAG, "MILESTONE: threshold=$threshold suppressed by prefs")
+                            }
                         }
                     }
                 } else {
@@ -235,20 +257,23 @@ class TimerService : Service() {
         val currentState = _timerState.value
         // Capture context reference outside withContext to avoid lambda receiver ambiguity
         val ctx = this
+        val soundOn = AppPreferences(ctx).soundEnabled
 
         withContext(Dispatchers.Main) {
-            // Play sound
-            try {
-                val resId: Int = R.raw.timer_end
-                MediaPlayer.create(ctx, resId)?.also { mp ->
-                    mp.start()
-                    mp.setOnCompletionListener { player -> player.release() }
+            if (soundOn) {
+                // Play session-end sound
+                try {
+                    val resId: Int = R.raw.timer_end
+                    MediaPlayer.create(ctx, resId)?.also { mp ->
+                        mp.start()
+                        mp.setOnCompletionListener { player -> player.release() }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "MediaPlayer failed: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "MediaPlayer failed: ${e.message}")
             }
 
-            // Vibrate
+            // Vibrate — always fires regardless of sound pref (tactile feedback)
             try {
                 val vibrator = ctx.getSystemService(Vibrator::class.java)
                 vibrator?.vibrate(VibrationEffect.createOneShot(500, VibrationEffect.DEFAULT_AMPLITUDE))
@@ -268,8 +293,9 @@ class TimerService : Service() {
             Phase.FOCUS
         }
 
-        // Auto-chain: active for tasks with multiple pomodoros
-        val shouldAutoChain = currentState.plannedPomodoros > 1 && when {
+        // Auto-chain: active for tasks with multiple pomodoros and user pref enabled
+        val autoChainEnabled = AppPreferences(this).autoChain
+        val shouldAutoChain = autoChainEnabled && currentState.plannedPomodoros > 1 && when {
             currentState.phase == Phase.FOCUS ->
                 newCount < currentState.plannedPomodoros  // more FOCUS sessions remain after this break
             else ->
@@ -277,7 +303,7 @@ class TimerService : Service() {
         }
 
         // Play pause announcement when transitioning to short break (5 min)
-        if (nextPhase == Phase.SHORT_BREAK) {
+        if (nextPhase == Phase.SHORT_BREAK && soundOn) {
             withContext(Dispatchers.Main) {
                 try {
                     MediaPlayer.create(ctx, R.raw.pause)?.also { mp ->
@@ -291,7 +317,7 @@ class TimerService : Service() {
         }
 
         // Play restart sound when short break (5 min) ends — LONG_BREAK excluded intentionally
-        if (currentState.phase == Phase.SHORT_BREAK) {
+        if (currentState.phase == Phase.SHORT_BREAK && soundOn) {
             withContext(Dispatchers.Main) {
                 try {
                     val mp = MediaPlayer.create(ctx, R.raw.restart)

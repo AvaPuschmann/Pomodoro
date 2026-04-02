@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Base theme for the window before Compose takes over. Done by PPU
-         Using NoActionBar (not Fullscreen) to stay compatible with enableEdgeToEdge(). -->
-    <style name="Theme.AgenticFocus" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- Splash screen theme (active while the system shows the launch screen).
+         postSplashScreenTheme switches to the real app theme once the splash exits. -->
+    <style name="Theme.AgenticFocus" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@android:color/black</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_round</item>
+        <item name="postSplashScreenTheme">@style/Theme.AgenticFocus.App</item>
+    </style>
+
+    <!-- Real window theme applied after splash exits. -->
+    <style name="Theme.AgenticFocus.App" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>

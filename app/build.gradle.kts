@@ -1,9 +1,17 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
 }
+
+// Read SUPABASE_URL and SUPABASE_ANON_KEY from local.properties (not committed to Git)
+val localProps = Properties()
+val localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) localProps.load(localPropsFile.inputStream())
 
 android {
     namespace = "com.agenticfocus"
@@ -17,6 +25,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "SUPABASE_URL", "\"${localProps["SUPABASE_URL"] ?: ""}\"")
+        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProps["SUPABASE_ANON_KEY"] ?: ""}\"")
     }
 
     buildTypes {
@@ -40,6 +51,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -60,8 +72,21 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
 
+    // Supabase
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.gotrue)
+    implementation(libs.supabase.realtime)
+    implementation(libs.supabase.postgrest)
+    runtimeOnly(libs.ktor.client.android)
+
+    implementation(libs.androidx.core.splashscreen)
+
+    // Security — EncryptedSharedPreferences
+    implementation(libs.security.crypto)
+
     testImplementation(libs.junit)
     testImplementation(libs.turbine)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)

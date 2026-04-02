@@ -20,9 +20,15 @@ interface TaskTemplateDao {
     @Update
     suspend fun update(template: TaskTemplateEntity)
 
+    @Query("SELECT updated_at FROM task_templates WHERE id = :id")
+    suspend fun getUpdatedAtById(id: String): Long?
+
     @Query("DELETE FROM task_templates WHERE id = :id")
     suspend fun deleteById(id: String)
 
-    @Query("DELETE FROM task_templates WHERE domainId = :domainId")
+    @Query("DELETE FROM task_templates WHERE domain_id = :domainId")
     suspend fun deleteByDomainId(domainId: String)
+
+    @Query("DELETE FROM task_templates")
+    suspend fun deleteAll()
 }
