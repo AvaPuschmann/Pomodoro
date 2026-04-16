@@ -22,5 +22,7 @@ data class DayTaskEntity(
     val urgency: String? = null,
     @ColumnInfo(name = "due_date") val dueDate: Long? = null,
     val note: String? = null,
-    @ColumnInfo(name = "is_completed") val isCompleted: Boolean = false
+    @ColumnInfo(name = "is_completed") val isCompleted: Boolean = false,
+    @ColumnInfo(name = "source", defaultValue = "NULL") val source: String? = null,
+    @ColumnInfo(name = "routine_item_id", defaultValue = "NULL") val routineItemId: String? = null
 )

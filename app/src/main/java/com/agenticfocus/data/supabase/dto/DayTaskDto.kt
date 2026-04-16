@@ -46,7 +46,13 @@ data class DayTaskDto(
     @SerialName("user_id") val userId: String,
     @SerialName("updated_at") val updatedAt: Long,
     @Serializable(with = BooleanOrIntSerializer::class)
-    @SerialName("is_completed") val isCompleted: Boolean = false
+    @SerialName("is_completed") val isCompleted: Boolean = false,
+    val source: String? = null,
+    @SerialName("routine_item_id") val routineItemId: String? = null,
+    val note: String? = null,
+    val impact: String? = null,
+    val urgency: String? = null,
+    @SerialName("due_date") val dueDate: Long? = null
 )
 
 fun DayTaskDto.toEntity() = DayTaskEntity(
@@ -54,7 +60,9 @@ fun DayTaskDto.toEntity() = DayTaskEntity(
     plannedPomodoros = plannedPomodoros, completedPomodoros = completedPomodoros,
     position = position, templateId = templateId, domainId = domainId,
     storyPoints = storyPoints, createdAt = createdAt,
-    userId = userId, updatedAt = updatedAt, isCompleted = isCompleted
+    userId = userId, updatedAt = updatedAt, isCompleted = isCompleted,
+    source = source, routineItemId = routineItemId,
+    note = note, impact = impact, urgency = urgency, dueDate = dueDate
 )
 
 fun DayTaskEntity.toDto(userId: String) = DayTaskDto(
@@ -70,5 +78,11 @@ fun DayTaskEntity.toDto(userId: String) = DayTaskDto(
     createdAt = createdAt,
     userId = userId,
     updatedAt = System.currentTimeMillis(),
-    isCompleted = isCompleted
+    isCompleted = isCompleted,
+    source = source,
+    routineItemId = routineItemId,
+    note = note,
+    impact = impact,
+    urgency = urgency,
+    dueDate = dueDate
 )

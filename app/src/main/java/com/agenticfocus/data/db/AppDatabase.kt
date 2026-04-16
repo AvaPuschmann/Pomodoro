@@ -10,6 +10,7 @@ import com.agenticfocus.data.dao.DayTaskDao
 import com.agenticfocus.data.dao.DomainDao
 import com.agenticfocus.data.dao.GoalDao
 import com.agenticfocus.data.dao.PomodoroSessionDao
+import com.agenticfocus.data.dao.RoutineDao
 import com.agenticfocus.data.dao.StatsDao
 import com.agenticfocus.data.dao.SubtaskDao
 import com.agenticfocus.data.dao.SyncQueueDao
@@ -18,6 +19,8 @@ import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.GoalEntity
 import com.agenticfocus.data.entity.PomodoroSessionEntity
+import com.agenticfocus.data.entity.RoutineEntity
+import com.agenticfocus.data.entity.RoutineItemEntity
 import com.agenticfocus.data.entity.SubtaskEntity
 import com.agenticfocus.data.entity.SyncQueueEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
@@ -30,9 +33,11 @@ import com.agenticfocus.data.entity.TaskTemplateEntity
         TaskTemplateEntity::class,
         SyncQueueEntity::class,
         SubtaskEntity::class,
-        GoalEntity::class
+        GoalEntity::class,
+        RoutineEntity::class,
+        RoutineItemEntity::class
     ],
-    version = 11,
+    version = 13,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -45,6 +50,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun syncQueueDao(): SyncQueueDao
     abstract fun subtaskDao(): SubtaskDao
     abstract fun goalDao(): GoalDao
+    abstract fun routineDao(): RoutineDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -215,6 +221,53 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE day_tasks ADD COLUMN source TEXT DEFAULT NULL")
+            }
+        }
+
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS routines (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        user_id TEXT NOT NULL DEFAULT '',
+                        type TEXT NOT NULL DEFAULT '',
+                        name TEXT NOT NULL DEFAULT '',
+                        trigger_time TEXT NOT NULL DEFAULT '06:00',
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        streak_count INTEGER NOT NULL DEFAULT 0,
+                        streak_last_completed_date TEXT,
+                        last_injected_date TEXT,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL DEFAULT 0
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_routines_user_id_type ON routines(user_id, type)")
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS routine_items (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        routine_id TEXT NOT NULL,
+                        template_id TEXT,
+                        snapshot_title TEXT NOT NULL DEFAULT '',
+                        snapshot_domain_id TEXT,
+                        snapshot_story_points INTEGER NOT NULL DEFAULT 0,
+                        override_pomodoros INTEGER,
+                        is_check_only INTEGER NOT NULL DEFAULT 0,
+                        position INTEGER NOT NULL DEFAULT 0,
+                        user_id TEXT NOT NULL DEFAULT '',
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL DEFAULT 0,
+                        FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE
+                    )
+                """)
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_routine_items_routine_id_position ON routine_items(routine_id, position)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_routine_items_template_id ON routine_items(template_id)")
+                db.execSQL("ALTER TABLE day_tasks ADD COLUMN routine_item_id TEXT DEFAULT NULL")
+            }
+        }
+
         private val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
@@ -277,7 +330,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "agenticfocus.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                     .build()
                     .also { INSTANCE = it }
             }
