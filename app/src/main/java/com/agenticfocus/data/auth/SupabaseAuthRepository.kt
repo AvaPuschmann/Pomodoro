@@ -1,8 +1,11 @@
 package com.agenticfocus.data.auth
 
+import android.util.Log
 import io.github.jan.supabase.SupabaseClient
+import io.github.jan.supabase.gotrue.SessionStatus
 import io.github.jan.supabase.gotrue.auth
 import io.github.jan.supabase.gotrue.providers.builtin.Email
+import kotlinx.coroutines.flow.Flow
 
 /**
  * Real implementation of [AuthRepository] backed by Supabase GoTrue (auth).
@@ -45,16 +48,24 @@ class SupabaseAuthRepository(
 
     override suspend fun restoreSession(): UserInfo? {
         return try {
-            // Explicitly refresh the stored session so supabase-kt reloads it from
-            // EncryptedSessionManager and renews the access token if expired (1h lifetime).
-            // Without this call, currentUserOrNull() returns null after a cold start
-            // when the access token has expired, forcing the user to re-enter credentials.
             supabase.auth.refreshCurrentSession()
+            Log.d(TAG, "Session refreshed successfully")
             val user = supabase.auth.currentUserOrNull() ?: return null
             UserInfo(userId = user.id, email = user.email ?: "")
-        } catch (_: Exception) {
-            null
+        } catch (e: Exception) {
+            Log.w(TAG, "Refresh failed (${e.message}), trying stored session")
+            // Network failure — fall back to stored session (offline mode).
+            // The access token may be expired but the user stays authenticated
+            // locally. supabase-kt will auto-refresh when connectivity returns.
+            val user = supabase.auth.currentUserOrNull() ?: return null
+            UserInfo(userId = user.id, email = user.email ?: "")
         }
+    }
+
+    fun sessionStatusFlow(): Flow<SessionStatus> = supabase.auth.sessionStatus
+
+    companion object {
+        private const val TAG = "SupabaseAuth"
     }
 
     override suspend fun signOut() {

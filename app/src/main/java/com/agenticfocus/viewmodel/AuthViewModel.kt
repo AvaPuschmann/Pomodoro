@@ -1,12 +1,15 @@
 package com.agenticfocus.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.agenticfocus.data.auth.AuthRepository
+import com.agenticfocus.data.auth.SupabaseAuthRepository
 import com.agenticfocus.data.auth.UserInfo
 import com.agenticfocus.data.sync.RealtimeSyncManager
 import com.agenticfocus.data.sync.SyncEngine
+import io.github.jan.supabase.gotrue.SessionStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,10 +47,53 @@ class AuthViewModel(
             } catch (_: Exception) {
                 _authState.value = AuthState.Unauthenticated
             } finally {
-                // Signal splash screen to exit — auth state is now determined.
                 com.agenticfocus.StartupState.isAuthChecked = true
             }
         }
+        startSessionMonitor()
+    }
+
+    private var monitorStarted = false
+
+    private fun startSessionMonitor() {
+        if (monitorStarted) return
+        val repo = authRepository
+        if (repo !is SupabaseAuthRepository) return
+        monitorStarted = true
+        viewModelScope.launch {
+            repo.sessionStatusFlow().collect { status ->
+                Log.d(TAG, "[auth] sessionStatus → $status")
+                when (status) {
+                    is SessionStatus.Authenticated -> {
+                        val user = UserInfo(
+                            userId = status.session.user?.id ?: return@collect,
+                            email = status.session.user?.email ?: ""
+                        )
+                        SyncEngine.currentUserId = user.userId
+                        if (_authState.value !is AuthState.Authenticated) {
+                            RealtimeSyncManager.startSync(user.userId)
+                        }
+                        _authState.value = AuthState.Authenticated(user.userId, user.email)
+                    }
+                    is SessionStatus.NotAuthenticated -> {
+                        if (_authState.value is AuthState.Authenticated) {
+                            Log.w(TAG, "Session lost — signing out")
+                            SyncEngine.currentUserId = ""
+                            RealtimeSyncManager.stopSync()
+                            _authState.value = AuthState.Unauthenticated
+                        }
+                    }
+                    is SessionStatus.LoadingFromStorage -> { /* wait */ }
+                    is SessionStatus.NetworkError -> {
+                        Log.w(TAG, "Network error during auth — staying authenticated (offline mode)")
+                    }
+                }
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "AuthViewModel"
     }
 
     /** Sign in with email and password. Updates [authState] and [errorMessage] accordingly. */
