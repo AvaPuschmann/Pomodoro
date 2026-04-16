@@ -71,6 +71,7 @@ fun DayTaskRow(
     subtasks: List<SubtaskEntity> = emptyList(),
     onToggleSubtask: ((subtaskId: String) -> Unit)? = null,
     domainColor: Color? = null,
+    routineType: String? = null,
     modifier: Modifier = Modifier,
     showDragHandle: Boolean = true
 ) {
@@ -154,6 +155,13 @@ fun DayTaskRow(
                     })
                 )
             } else {
+                if (routineType != null) {
+                    Text(
+                        text = if (routineType == "morning") "☀️" else "🌙",
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                }
                 Text(
                     text = task.name,
                     color = TextWhite,

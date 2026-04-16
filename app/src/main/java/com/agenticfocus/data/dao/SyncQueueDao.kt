@@ -23,4 +23,7 @@ interface SyncQueueDao {
 
     @Query("DELETE FROM sync_queue WHERE retry_count >= :maxRetry")
     suspend fun deleteWhereRetryExceeds(maxRetry: Int)
+
+    @Query("DELETE FROM sync_queue WHERE entity_type = :entityType")
+    suspend fun deleteByEntityType(entityType: String)
 }

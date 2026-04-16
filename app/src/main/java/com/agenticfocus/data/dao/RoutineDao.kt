@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.agenticfocus.data.entity.RoutineEntity
 import com.agenticfocus.data.entity.RoutineItemEntity
 import kotlinx.coroutines.flow.Flow
@@ -17,7 +18,7 @@ interface RoutineDao {
     @Query("SELECT * FROM routines WHERE user_id = :userId AND is_active = 1 ORDER BY type")
     suspend fun getActiveRoutines(userId: String): List<RoutineEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertRoutine(routine: RoutineEntity)
 
     @Query("DELETE FROM routines WHERE id = :id")

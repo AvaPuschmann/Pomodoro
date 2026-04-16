@@ -56,6 +56,11 @@ import com.agenticfocus.viewmodel.AuthViewModelFactory
 import com.agenticfocus.viewmodel.DayPlannerViewModel
 import com.agenticfocus.viewmodel.LibraryViewModel
 import com.agenticfocus.viewmodel.StatsViewModel
+import com.agenticfocus.data.db.AppDatabase
+import com.agenticfocus.data.repository.RoutineRepository
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.launch
 
 private enum class Tab(val label: String, val icon: ImageVector) {
@@ -67,6 +72,16 @@ private enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 class MainActivity : ComponentActivity() {
+    private var routineRepo: RoutineRepository? = null
+    private var authenticatedUserId: String? = null
+
+    override fun onResume() {
+        super.onResume()
+        val userId = authenticatedUserId ?: return
+        val repo = routineRepo ?: return
+        lifecycleScope.launch { repo.injectRoutinesForToday(userId) }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // installSplashScreen must be called before super.onCreate.
         // The splash stays visible until isAuthChecked=true (after restoreSession completes),
@@ -124,6 +139,28 @@ class MainActivity : ComponentActivity() {
                             LoginScreen(authViewModel = authVM)
                         }
                         is AuthState.Authenticated -> {
+                            val userId = (authState as AuthState.Authenticated).userId
+                            LaunchedEffect(userId) {
+                                try {
+                                    val db = AppDatabase.getInstance(this@MainActivity)
+                                    db.syncQueueDao().deleteByEntityType("routines")
+                                    db.syncQueueDao().deleteByEntityType("routine_items")
+                                    val repo = RoutineRepository(db.routineDao(), db.dayTaskDao(), db.syncQueueDao())
+                                    this@MainActivity.routineRepo = repo
+                                    this@MainActivity.authenticatedUserId = userId
+                                    // 1. Inject from LOCAL data immediately (no network needed)
+                                    android.util.Log.d("MainActivity", "Launching routine injection (local) for $userId")
+                                    repo.injectRoutinesForToday(userId)
+                                    // 2. Pull from Supabase in background (with delay for auth to settle)
+                                    kotlinx.coroutines.delay(5000)
+                                    repo.pullRoutinesFromSupabase(userId)
+                                    // 3. Re-inject in case pull brought new/updated routines
+                                    repo.injectRoutinesForToday(userId)
+                                } catch (e: Exception) {
+                                    android.util.Log.e("MainActivity", "Routine injection failed", e)
+                                }
+                            }
+
                             val dayPlannerVM: DayPlannerViewModel = viewModel()
                             val libraryVM: LibraryViewModel = viewModel()
                             val statsVM: StatsViewModel = viewModel()

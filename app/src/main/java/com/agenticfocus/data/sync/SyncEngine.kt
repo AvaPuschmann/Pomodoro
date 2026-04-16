@@ -8,6 +8,7 @@ import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.GoalEntity
 import com.agenticfocus.data.entity.PomodoroSessionEntity
+import com.agenticfocus.data.entity.RoutineEntity
 import com.agenticfocus.data.entity.SubtaskEntity
 import com.agenticfocus.data.entity.SyncQueueEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
@@ -172,6 +173,19 @@ object SyncEngine {
         }
     }
 
+    // ── Routine ───────────────────────────────────────────────────────────────
+
+    suspend fun upsertRoutine(entity: RoutineEntity) {
+        val dto = entity.toDto()
+        if (isConnected()) {
+            if (!tryUpsert("routines") { SupabaseClientProvider.client.from("routines").upsert(dto) }) {
+                enqueue("routines", entity.id, "UPSERT", Json.encodeToString(dto))
+            }
+        } else {
+            enqueue("routines", entity.id, "UPSERT", Json.encodeToString(dto))
+        }
+    }
+
     // ── Flush (process offline queue) ─────────────────────────────────────────
 
     suspend fun flush() {
@@ -261,6 +275,10 @@ object SyncEngine {
                 "goals" -> {
                     val dto = Json.decodeFromString<com.agenticfocus.data.supabase.dto.GoalDto>(entry.payload)
                     SupabaseClientProvider.client.from("goals").upsert(dto)
+                }
+                "routines" -> {
+                    val dto = Json.decodeFromString<com.agenticfocus.data.supabase.dto.RoutineDto>(entry.payload)
+                    SupabaseClientProvider.client.from("routines").upsert(dto)
                 }
                 else -> { /* unknown table — discard */ }
             }

@@ -118,6 +118,26 @@ fun DayPlannerScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val goalsEnabled = remember { com.agenticfocus.data.AppPreferences(context).featureGoals }
 
+    // Routine type lookup: routineItemId → "morning" | "evening"
+    var routineTypeMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.Dispatchers.IO.let { io ->
+            kotlinx.coroutines.withContext(io) {
+                val db = com.agenticfocus.data.db.AppDatabase.getInstance(context)
+                val dao = db.routineDao()
+                val userId = com.agenticfocus.data.sync.SyncEngine.currentUserId
+                if (userId.isNotEmpty()) {
+                    val routines = dao.getActiveRoutines(userId)
+                    val items = dao.getAllRoutineItems(userId)
+                    val routineTypeById = routines.associate { it.id to it.type }
+                    routineTypeMap = items.mapNotNull { item ->
+                        routineTypeById[item.routineId]?.let { type -> item.id to type }
+                    }.toMap()
+                }
+            }
+        }
+    }
+
     val lazyListState = rememberLazyListState()
 
     // Split tasks: active vs done (isCompleted overrides pomodoro count)
@@ -268,7 +288,7 @@ fun DayPlannerScreen(
                                             libraryState.domains.find { it.id == id }
                                                 ?.let { runCatching { Color(it.color.toColorInt()) }.getOrNull() }
                                         },
-
+                                        routineType = task.routineItemId?.let { routineTypeMap[it] },
                                     )
                                 }
                             }
@@ -355,7 +375,7 @@ fun DayPlannerScreen(
                                             libraryState.domains.find { it.id == id }
                                                 ?.let { runCatching { Color(it.color.toColorInt()) }.getOrNull() }
                                         },
-
+                                        routineType = task.routineItemId?.let { routineTypeMap[it] },
                                     )
                                 }
                             }

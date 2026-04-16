@@ -76,7 +76,8 @@ private fun DayTaskEntity.toDayTask() = DayTask(
     urgency = urgency,
     dueDate = dueDate,
     note = note,
-    isCompleted = isCompleted
+    isCompleted = isCompleted,
+    routineItemId = routineItemId
 )
 
 private fun DayTask.toEntity(date: String?, position: Int) = DayTaskEntity(
@@ -93,5 +94,6 @@ private fun DayTask.toEntity(date: String?, position: Int) = DayTaskEntity(
     urgency = urgency,
     dueDate = dueDate,
     note = note,
-    isCompleted = isCompleted
+    isCompleted = isCompleted,
+    routineItemId = null
 )

@@ -34,7 +34,9 @@ class AuthViewModel(
     /** Called on app start to restore a previously stored session. */
     fun restoreSession() {
         viewModelScope.launch {
-            _authState.value = AuthState.Loading
+            if (_authState.value !is AuthState.Authenticated) {
+                _authState.value = AuthState.Loading
+            }
             try {
                 val user: UserInfo? = authRepository.restoreSession()
                 if (user != null) {

@@ -14,7 +14,8 @@ data class DayTask(
     val urgency: String? = null,      // "urgent" | "not_urgent" | null
     val dueDate: Long? = null,        // Unix ms, null = no deadline
     val note: String? = null,
-    val isCompleted: Boolean = false
+    val isCompleted: Boolean = false,
+    val routineItemId: String? = null
 )
 
 data class DayPlannerState(
