@@ -7,8 +7,10 @@ import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.RoutineEntity
 import com.agenticfocus.data.entity.RoutineItemEntity
 import com.agenticfocus.data.supabase.SupabaseClientProvider
+import com.agenticfocus.data.supabase.dto.DayTaskDto
 import com.agenticfocus.data.supabase.dto.RoutineDto
 import com.agenticfocus.data.supabase.dto.RoutineItemDto
+import com.agenticfocus.data.supabase.dto.toEntity
 import com.agenticfocus.data.sync.SyncEngine
 import io.github.jan.supabase.postgrest.from
 import java.time.LocalDate
@@ -57,6 +59,23 @@ class RoutineRepository(
         }
     }
 
+    /** Pull today's routine-injected tasks from Supabase to local DB so the
+     *  exists check catches tasks created by the other device. */
+    private suspend fun pullTodayRoutineTasks(userId: String, todayStr: String) {
+        try {
+            val tasks = SupabaseClientProvider.client.from("day_tasks")
+                .select { filter { eq("user_id", userId); eq("date", todayStr); neq("routine_item_id", "null") } }
+                .decodeList<com.agenticfocus.data.supabase.dto.DayTaskDto>()
+            for (dto in tasks) {
+                val entity = dto.toEntity()
+                dayTaskDao.upsert(entity)
+            }
+            if (tasks.isNotEmpty()) Log.d(TAG, "Pulled ${tasks.size} routine tasks for $todayStr from Supabase")
+        } catch (e: Exception) {
+            Log.w(TAG, "pullTodayRoutineTasks failed (offline?): ${e.message}")
+        }
+    }
+
     suspend fun injectRoutinesForToday(userId: String): Int {
         if (!isInjecting.compareAndSet(false, true)) return 0
 
@@ -65,6 +84,9 @@ class RoutineRepository(
             val today = LocalDate.now()
             val todayStr = today.format(DateTimeFormatter.ISO_LOCAL_DATE)
             val now = LocalTime.now()
+
+            // Pull today's routine tasks from Supabase first (prevents multi-device duplication)
+            pullTodayRoutineTasks(userId, todayStr)
 
             val activeRoutines = routineDao.getActiveRoutines(userId)
             Log.d(TAG, "Active routines: ${activeRoutines.size}, today=$todayStr, now=$now")
