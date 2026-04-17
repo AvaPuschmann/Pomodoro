@@ -119,22 +119,26 @@ fun DayPlannerScreen(
     val goalsEnabled = remember { com.agenticfocus.data.AppPreferences(context).featureGoals }
 
     // Routine type lookup: routineItemId → "morning" | "evening"
+    // Reloads periodically to catch data from Supabase pull (runs 5s after mount)
     var routineTypeMap by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.Dispatchers.IO.let { io ->
-            kotlinx.coroutines.withContext(io) {
-                val db = com.agenticfocus.data.db.AppDatabase.getInstance(context)
-                val dao = db.routineDao()
-                val userId = com.agenticfocus.data.sync.SyncEngine.currentUserId
-                if (userId.isNotEmpty()) {
-                    val routines = dao.getActiveRoutines(userId)
-                    val items = dao.getAllRoutineItems(userId)
-                    val routineTypeById = routines.associate { it.id to it.type }
-                    routineTypeMap = items.mapNotNull { item ->
-                        routineTypeById[item.routineId]?.let { type -> item.id to type }
-                    }.toMap()
-                }
+    var routineLoadTick by remember { mutableStateOf(0) }
+    LaunchedEffect(routineLoadTick) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            val db = com.agenticfocus.data.db.AppDatabase.getInstance(context)
+            val dao = db.routineDao()
+            val userId = com.agenticfocus.data.sync.SyncEngine.currentUserId
+            if (userId.isNotEmpty()) {
+                val routines = dao.getActiveRoutines(userId)
+                val items = dao.getAllRoutineItems(userId)
+                val routineTypeById = routines.associate { it.id to it.type }
+                routineTypeMap = items.mapNotNull { item ->
+                    routineTypeById[item.routineId]?.let { type -> item.id to type }
+                }.toMap()
             }
+        }
+        if (routineLoadTick == 0) {
+            kotlinx.coroutines.delay(8000)
+            routineLoadTick = 1
         }
     }
 
