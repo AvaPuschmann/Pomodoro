@@ -4,9 +4,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.media.MediaPlayer
 import android.os.IBinder
+import android.os.PowerManager
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
@@ -83,9 +85,77 @@ class TimerService : Service() {
     /** Thresholds already triggered this session — prevents double-firing. */
     private val triggeredAlerts = mutableSetOf<Int>()
 
+    /** WakeLock to keep CPU alive during active pomodoro (Doze protection). */
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    private fun acquireWakeLock() {
+        if (wakeLock == null) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AgenticFocus::Pomodoro")
+        }
+        wakeLock?.takeIf { !it.isHeld }?.acquire(60 * 60 * 1000L) // max 1h safety
+    }
+
+    private fun releaseWakeLock() {
+        wakeLock?.takeIf { it.isHeld }?.release()
+    }
+
+    /** Persist timer state so it can be restored if the OS kills the service. */
+    private fun persistState() {
+        val s = _timerState.value
+        getSharedPreferences("timer_state", Context.MODE_PRIVATE).edit()
+            .putBoolean("active", s.isRunning)
+            .putLong("startedAt", startedAt)
+            .putInt("totalSeconds", s.totalSeconds)
+            .putInt("remainingSeconds", s.remainingSeconds)
+            .putString("phase", s.phase.name)
+            .putString("taskName", s.taskName)
+            .putInt("plannedPomodoros", s.plannedPomodoros)
+            .putInt("completedPomodoros", s.completedPomodoros)
+            .putInt("pausedRemaining", pausedRemaining)
+            .apply()
+    }
+
+    private fun clearPersistedState() {
+        getSharedPreferences("timer_state", Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun tryRestoreState(): Boolean {
+        val prefs = getSharedPreferences("timer_state", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("active", false)) return false
+        val savedStartedAt = prefs.getLong("startedAt", 0L)
+        if (savedStartedAt == 0L) return false
+
+        val totalSecs = prefs.getInt("totalSeconds", 0)
+        val elapsed = ((System.currentTimeMillis() - savedStartedAt) / 1000).toInt()
+        val remaining = (totalSecs - elapsed).coerceAtLeast(0)
+
+        if (remaining <= 0) {
+            clearPersistedState()
+            return false
+        }
+
+        val phase = try { Phase.valueOf(prefs.getString("phase", "FOCUS") ?: "FOCUS") } catch (_: Exception) { Phase.FOCUS }
+        _timerState.value = _timerState.value.copy(
+            isRunning = false,
+            totalSeconds = totalSecs,
+            remainingSeconds = remaining,
+            phase = phase,
+            taskName = prefs.getString("taskName", "") ?: "",
+            plannedPomodoros = prefs.getInt("plannedPomodoros", 1),
+            completedPomodoros = prefs.getInt("completedPomodoros", 0)
+        )
+        startedAt = savedStartedAt
+        pausedRemaining = 0
+        Log.d(TAG, "Restored timer state: ${remaining}s remaining, phase=$phase")
+        handleStart()
+        return true
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
+        tryRestoreState()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -158,6 +228,7 @@ class TimerService : Service() {
 
     private fun handleStart() {
         val state = _timerState.value
+        acquireWakeLock()
         startForeground(NOTIFICATION_ID, buildNotification())
 
         // If resuming from pause, use saved remaining; otherwise use state remaining
@@ -220,7 +291,12 @@ class TimerService : Service() {
                     updateNotification()
                 }
 
+                // Persist every 5 seconds for crash recovery
+                if (remaining % 5 == 0) persistState()
+
                 if (remaining == 0) {
+                    clearPersistedState()
+                    releaseWakeLock()
                     onSessionComplete()
                     break
                 }
@@ -233,7 +309,8 @@ class TimerService : Service() {
         tickJob = null
         pausedRemaining = _timerState.value.remainingSeconds
         _timerState.value = _timerState.value.copy(isRunning = false)
-        // Keep foreground for simplicity while paused
+        releaseWakeLock()
+        persistState()
         updateNotification()
     }
 
@@ -429,8 +506,18 @@ class TimerService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        if (_timerState.value.isRunning) {
+            persistState()
+            Log.d(TAG, "onTaskRemoved: timer state persisted for recovery")
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        releaseWakeLock()
+        if (_timerState.value.isRunning) persistState()
         serviceScope.cancel()
     }
 }
