@@ -265,6 +265,7 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_routine_items_routine_id_position ON routine_items(routine_id, position)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_routine_items_template_id ON routine_items(template_id)")
                 db.execSQL("ALTER TABLE day_tasks ADD COLUMN routine_item_id TEXT DEFAULT NULL")
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS idx_day_tasks_routine_item_date ON day_tasks(routine_item_id, date) WHERE routine_item_id IS NOT NULL")
             }
         }
 

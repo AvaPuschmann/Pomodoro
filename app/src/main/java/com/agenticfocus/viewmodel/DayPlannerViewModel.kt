@@ -98,10 +98,26 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
 
-        // Observe timer to auto-increment completed pomodoros
+        // Observe timer to sync completed + planned pomodoros
         viewModelScope.launch {
             TimerService.timerState.collect { timerState ->
                 val activeId = _state.value.activeTaskId
+
+                // Sync plannedPomodoros from Timer → Planner (bidirectional fix)
+                if (activeId != null) {
+                    val activeTask = _state.value.tasks.find { it.id == activeId }
+                    if (activeTask != null && activeTask.plannedPomodoros != timerState.plannedPomodoros) {
+                        _state.update { s ->
+                            s.copy(tasks = s.tasks.map { task ->
+                                if (task.id == activeId) task.copy(plannedPomodoros = timerState.plannedPomodoros)
+                                else task
+                            })
+                        }
+                        persistAll()
+                    }
+                }
+
+                // Auto-increment completed pomodoros
                 if (activeId != null && timerState.completedPomodoros > previousCompleted) {
                     val endTime = System.currentTimeMillis()
                     val startTime = endTime - (25 * 60 * 1000L)
@@ -242,6 +258,16 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
         }
         checkCapacityAlert(before)
         persistAll()
+        // Sync to TimerService if this is the active task
+        if (id == _state.value.activeTaskId) {
+            val ctx = getApplication<Application>()
+            ctx.startService(
+                Intent(ctx, TimerService::class.java).apply {
+                    action = TimerService.ACTION_UPDATE_PLANNED
+                    putExtra(TimerService.EXTRA_PLANNED_DELTA, delta)
+                }
+            )
+        }
     }
 
     fun updateTaskDetails(id: String, name: String, note: String?, impact: String?, urgency: String?, scheduledDate: LocalDate?, newSubtasks: List<SubtaskEntity> = emptyList(), originalSubtaskIds: Set<String> = emptySet()) {
