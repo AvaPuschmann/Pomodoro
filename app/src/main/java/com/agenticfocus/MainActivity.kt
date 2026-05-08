@@ -42,7 +42,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.agenticfocus.data.auth.SupabaseAuthRepository
 import com.agenticfocus.data.supabase.SupabaseClientProvider
+import com.agenticfocus.data.sync.RealtimeSyncManager
 import com.agenticfocus.data.sync.SyncStatusManager
+import kotlinx.coroutines.flow.first
 import com.agenticfocus.ui.screen.DayPlannerScreen
 import com.agenticfocus.ui.screen.LibraryScreen
 import com.agenticfocus.ui.screen.LoginScreen
@@ -79,6 +81,10 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         val userId = authenticatedUserId ?: return
         val repo = routineRepo ?: return
+        // A1 (F8) — Catch-up on Realtime events potentially missed while in background.
+        // Periodic pull is now 5 min, so without this we'd wait up to 5 min after
+        // foreground for stale data to reconcile.
+        RealtimeSyncManager.triggerPull(userId)
         lifecycleScope.launch { repo.injectRoutinesForToday(userId) }
     }
 
@@ -143,18 +149,20 @@ class MainActivity : ComponentActivity() {
                             LaunchedEffect(userId) {
                                 try {
                                     val db = AppDatabase.getInstance(this@MainActivity)
-                                    db.syncQueueDao().deleteByEntityType("routines")
-                                    db.syncQueueDao().deleteByEntityType("routine_items")
-                                    val repo = RoutineRepository(db.routineDao(), db.dayTaskDao(), db.syncQueueDao())
+                                    // A1 (F6) — sync_queue cleanup for routines/routine_items now lives
+                                    // in RealtimeSyncManager.startSync (one-shot, before first pullSync).
+                                    // Centralised pullSync (incl. routines + routine_items) runs via
+                                    // AuthViewModel.startSync in parallel of this LaunchedEffect.
+                                    val repo = RoutineRepository(db.routineDao(), db.dayTaskDao())
                                     this@MainActivity.routineRepo = repo
                                     this@MainActivity.authenticatedUserId = userId
                                     // 1. Inject from LOCAL data immediately (no network needed)
                                     android.util.Log.d("MainActivity", "Launching routine injection (local) for $userId")
                                     repo.injectRoutinesForToday(userId)
-                                    // 2. Pull from Supabase in background (with delay for auth to settle)
-                                    kotlinx.coroutines.delay(5000)
-                                    repo.pullRoutinesFromSupabase(userId)
-                                    // 3. Re-inject in case pull brought new/updated routines
+                                    // 2. A1 (F7) — Wait for the first centralised pullSync to complete
+                                    //    deterministically (replaces the old fixed delay(5000)).
+                                    SyncStatusManager.firstPullCompleted.first { it }
+                                    // 3. Re-inject now that routines + routine_items are in cache.
                                     repo.injectRoutinesForToday(userId)
                                 } catch (e: Exception) {
                                     android.util.Log.e("MainActivity", "Routine injection failed", e)
@@ -211,6 +219,11 @@ class MainActivity : ComponentActivity() {
                                     Tab.STATS    -> StatsScreen(statsVM, contentPadding = innerPadding)
                                     Tab.SETTINGS -> SettingsScreen(
                                         onSignOut = { authVM.signOut() },
+                                        onManualSync = {
+                                            this@MainActivity.authenticatedUserId?.let { uid ->
+                                                RealtimeSyncManager.triggerPull(uid)
+                                            }
+                                        },
                                         contentPadding = innerPadding
                                     )
                                 }

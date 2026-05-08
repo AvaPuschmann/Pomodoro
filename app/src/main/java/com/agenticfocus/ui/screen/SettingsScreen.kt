@@ -11,6 +11,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -25,7 +26,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.agenticfocus.data.AppPreferences
+import com.agenticfocus.data.sync.SyncStatusManager
 import com.agenticfocus.ui.theme.SubtleWhite
 import com.agenticfocus.ui.theme.TextWhite
 import com.agenticfocus.ui.theme.TomatoRed
@@ -33,6 +36,7 @@ import com.agenticfocus.ui.theme.TomatoRed
 @Composable
 fun SettingsScreen(
     onSignOut: () -> Unit,
+    onManualSync: () -> Unit,
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -120,6 +124,40 @@ fun SettingsScreen(
             onCheckedChange = { sound1min = it; prefs.sound1min = it }
         )
 
+        // ── Section: Synchronisation ─────────────────────────────────────────────
+        SectionHeader("Synchronisation", topPadding = true)
+
+        val syncStatus by SyncStatusManager.status.collectAsStateWithLifecycle()
+        val lastSyncAt by SyncStatusManager.lastSyncAt.collectAsStateWithLifecycle()
+        val (statusEmoji, statusLabel) = when (syncStatus) {
+            SyncStatusManager.SyncStatus.SYNCED -> {
+                val timeStr = lastSyncAt?.let { formatRelativeTime(it) } ?: ""
+                "✅" to if (timeStr.isNotEmpty()) "Synchronisé · $timeStr" else "Synchronisé"
+            }
+            SyncStatusManager.SyncStatus.SYNCING -> "🔄" to "Synchronisation…"
+            SyncStatusManager.SyncStatus.OFFLINE -> "📴" to "Hors ligne"
+            SyncStatusManager.SyncStatus.ERROR   -> "❌" to "Erreur sync"
+        }
+
+        Text(
+            text = "$statusEmoji $statusLabel",
+            color = SubtleWhite,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
+        )
+
+        OutlinedButton(
+            onClick = onManualSync,
+            enabled = syncStatus != SyncStatusManager.SyncStatus.SYNCING,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = if (syncStatus == SyncStatusManager.SyncStatus.SYNCING) "Synchronisation en cours…"
+                       else "Synchroniser maintenant",
+                color = TextWhite
+            )
+        }
+
         // ── Logout ───────────────────────────────────────────────────────────────
         Button(
             onClick = onSignOut,
@@ -130,6 +168,18 @@ fun SettingsScreen(
         ) {
             Text("Se déconnecter", color = TextWhite)
         }
+    }
+}
+
+private fun formatRelativeTime(timestampMs: Long): String {
+    val deltaMs = System.currentTimeMillis() - timestampMs
+    val minutes = deltaMs / 60_000
+    val hours = deltaMs / 3_600_000
+    return when {
+        minutes < 1  -> "à l'instant"
+        minutes < 60 -> "il y a ${minutes}m"
+        hours < 24   -> "il y a ${hours}h"
+        else         -> "il y a ${hours / 24}j"
     }
 }
 

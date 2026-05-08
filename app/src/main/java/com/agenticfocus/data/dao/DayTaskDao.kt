@@ -36,4 +36,11 @@ interface DayTaskDao {
 
     @Delete
     suspend fun delete(task: DayTaskEntity)
+
+    // A1 reconciliation — include orphan rows (user_id='') so they can be
+    // cleaned up by the reconciliation step (those rows are never in Supabase
+    // since Supabase queries filter by user_id, so they will be deleted as
+    // "absent from remote").
+    @Query("SELECT id FROM day_tasks WHERE user_id = :userId OR user_id = ''")
+    suspend fun getAllIdsForUser(userId: String): List<String>
 }

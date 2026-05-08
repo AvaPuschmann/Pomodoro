@@ -1,11 +1,15 @@
 package com.agenticfocus.data.sync
 
+import android.util.Log
+import androidx.room.withTransaction
 import com.agenticfocus.data.db.AppDatabase
 import com.agenticfocus.data.supabase.SupabaseClientProvider
 import com.agenticfocus.data.supabase.dto.DayTaskDto
 import com.agenticfocus.data.supabase.dto.DomainDto
 import com.agenticfocus.data.supabase.dto.GoalDto
 import com.agenticfocus.data.supabase.dto.PomodoroSessionDto
+import com.agenticfocus.data.supabase.dto.RoutineDto
+import com.agenticfocus.data.supabase.dto.RoutineItemDto
 import com.agenticfocus.data.supabase.dto.SubtaskDto
 import com.agenticfocus.data.supabase.dto.TaskTemplateDto
 import com.agenticfocus.data.supabase.dto.toEntity
@@ -19,15 +23,31 @@ import io.github.jan.supabase.realtime.decodeOldRecord
 import io.github.jan.supabase.realtime.decodeRecord
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
 object RealtimeSyncManager {
+
+    private const val TAG = "RealtimeSyncManager"
+    private const val PAGE_SIZE = 1000
+    private const val PERIODIC_INTERVAL_MS = 300_000L // 5 minutes (was 30s before A1 fix)
+
+    // A2.5 — Swallows uncaught exceptions from Realtime subscription cleanup.
+    // supabase-kt 2.6.1 has a race condition in CallbackManagerImpl.removeCallbackById
+    // (AtomicMutableList not thread-safe for concurrent removes). Without this handler,
+    // an IndexOutOfBoundsException during awaitClose of any postgresChangeFlow propagates
+    // as FATAL EXCEPTION and kills the process — observed historically across April 2026.
+    // SupervisorJob isolates failures but does NOT catch them ; we need this handler.
+    private val swallowRealtimeRaces = CoroutineExceptionHandler { _, e ->
+        Log.w(TAG, "Realtime subscription cleanup error swallowed: ${e.message}")
+    }
 
     private var db: AppDatabase? = null
     private var syncScope: CoroutineScope? = null
@@ -39,7 +59,7 @@ object RealtimeSyncManager {
 
     fun startSync(userId: String) {
         stopSync()
-        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+        val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + swallowRealtimeRaces)
         syncScope = scope
         scope.launch {
             try {
@@ -70,73 +90,198 @@ object RealtimeSyncManager {
                     onUpsert = { dto -> db?.goalDao()?.upsert(dto.toEntity()) },
                     onDelete = { dto -> db?.goalDao()?.deleteById(dto.id) }
                 )
+                // A1 — Realtime subscriptions for routines + routine_items
+                subscribeToTable<RoutineDto>(ch, "routines", userId, scope,
+                    onUpsert = { dto -> db?.routineDao()?.upsertRoutine(dto.toEntity()) },
+                    onDelete = { dto -> db?.routineDao()?.deleteRoutine(dto.id) }
+                )
+                subscribeToTable<RoutineItemDto>(ch, "routine_items", userId, scope,
+                    onUpsert = { dto -> db?.routineDao()?.upsertRoutineItem(dto.toEntity()) },
+                    onDelete = { dto -> db?.routineDao()?.deleteRoutineItem(dto.id) }
+                )
 
                 ch.subscribe()
+
+                // A1 (F6) — One-shot startup cleanup of stale sync_queue entries for routines.
+                // Was previously inside RoutineRepository.pullRoutinesFromSupabase (one-shot at app start).
+                // Must NOT be moved into pullSync() because pullSync() now runs every 5 min
+                // (and on reconnect, onResume) — this would nuke pending offline routine mutations
+                // (relevant once D3 ships routine creation on mobile).
+                try {
+                    db?.syncQueueDao()?.deleteByEntityType("routines")
+                    db?.syncQueueDao()?.deleteByEntityType("routine_items")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to clear stale sync_queue routines: ${e.message}")
+                }
+
                 pullSync(userId)
                 monitorReconnect(userId, scope)
                 startPeriodicSync(userId, scope)
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                Log.w(TAG, "startSync failed: ${e.message}")
+            }
         }
     }
 
     fun stopSync() {
         val scope = syncScope
         val ch = realtimeChannel
-        if (scope != null && ch != null) {
-            scope.launch {
-                try { ch.unsubscribe() } catch (_: Exception) {}
-            }
+        // A2.5 — Unsubscribe BEFORE cancelling scope. If we cancel the scope first,
+        // all 8 subscription flows' awaitClose handlers race to call removeCallbackById
+        // concurrently and the underlying AtomicMutableList in supabase-kt 2.6.1 trips
+        // an IndexOutOfBoundsException. Sequencing the unsubscribe first lets the
+        // channel close cleanly before the flow scope is torn down.
+        if (ch != null) {
+            try {
+                // Fire-and-forget on a temporary scope outside the cancelled one,
+                // so the unsubscribe survives the scope teardown.
+                CoroutineScope(Dispatchers.IO + swallowRealtimeRaces).launch {
+                    try { ch.unsubscribe() } catch (_: Exception) {}
+                }
+            } catch (_: Exception) {}
         }
         scope?.cancel()
         syncScope = null
         realtimeChannel = null
+        SyncStatusManager.resetFirstPullCompleted()
     }
 
-    // ── Pull sync (catch-up on startup and reconnect) ─────────────────────────
+    /** A1 (F8) — Manual pull trigger, called from MainActivity.onResume to catch up
+     *  on Realtime events potentially missed while the app was in background. */
+    fun triggerPull(userId: String) {
+        val scope = syncScope ?: return
+        scope.launch {
+            if (SyncStatusManager.status.value != SyncStatusManager.SyncStatus.OFFLINE) {
+                pullSync(userId)
+            }
+        }
+    }
+
+    // ── Paginated fetch helper ────────────────────────────────────────────────
+    // A1 (F3) — CRITICAL: rethrow on error. NEVER return a partial dataset.
+    // The caller pullSync() must skip reconciliation if this throws, otherwise
+    // a truncated fetch silently deletes local rows beyond the truncation point
+    // (the bug pagination was meant to prevent — see desktop feedback_desktop_sync_pagination).
+    private suspend inline fun <reified T : Any> fetchAllUserRows(
+        table: String,
+        userId: String
+    ): List<T> {
+        val all = mutableListOf<T>()
+        var from = 0
+        while (true) {
+            val page = try {
+                SupabaseClientProvider.client.from(table)
+                    .select {
+                        filter { eq("user_id", userId) }
+                        range(from.toLong(), (from + PAGE_SIZE - 1).toLong())
+                    }
+                    .decodeList<T>()
+            } catch (e: Exception) {
+                Log.e(TAG, "fetchAllUserRows failed for $table at offset $from: ${e.message}")
+                throw e
+            }
+            if (page.isEmpty()) break
+            all.addAll(page)
+            if (page.size < PAGE_SIZE) break
+            from += PAGE_SIZE
+        }
+        return all
+    }
+
+    // ── Pull sync (catch-up on startup, reconnect, onResume, and periodic) ────
 
     private suspend fun pullSync(userId: String) {
         SyncStatusManager.setSyncing()
         val db = db ?: return
         try {
-            val tasks = SupabaseClientProvider.client.from("day_tasks")
-                .select { filter { eq("user_id", userId) } }
-                .decodeList<DayTaskDto>()
-            // Supabase is authoritative — always upsert all remote rows
-            for (dto in tasks) {
-                db.dayTaskDao().upsert(dto.toEntity())
-            }
-
-            val sessions = SupabaseClientProvider.client.from("pomodoro_sessions")
-                .select { filter { eq("user_id", userId) } }
-                .decodeList<PomodoroSessionDto>()
-            sessions.forEach { db.pomodoroSessionDao().upsert(it.toEntity()) }
-
-            val domains = SupabaseClientProvider.client.from("domains")
-                .select { filter { eq("user_id", userId) } }
-                .decodeList<DomainDto>()
-            // Always clear + replace to avoid stale/orphaned rows
+            // ── Domains: clear-then-replace (preserve invariant for orphan cleanup, F5) ─
+            val tDomains = System.currentTimeMillis()
+            val domains = fetchAllUserRows<DomainDto>("domains", userId)
             db.domainDao().deleteAll()
             domains.forEach { db.domainDao().insert(it.toEntity()) }
+            Log.d(TAG, "Pulled ${domains.size} domains in ${System.currentTimeMillis() - tDomains}ms")
 
-            val templates = SupabaseClientProvider.client.from("task_templates")
-                .select { filter { eq("user_id", userId) } }
-                .decodeList<TaskTemplateDto>()
-            // Always clear templates when domains are refreshed (referential integrity)
+            // ── Task templates: clear-then-replace (referential integrity with domains, F5) ─
+            val tTemplates = System.currentTimeMillis()
+            val templates = fetchAllUserRows<TaskTemplateDto>("task_templates", userId)
             db.taskTemplateDao().deleteAll()
             templates.forEach { db.taskTemplateDao().insert(it.toEntity()) }
+            Log.d(TAG, "Pulled ${templates.size} task_templates in ${System.currentTimeMillis() - tTemplates}ms")
 
-            val subtasks = SupabaseClientProvider.client.from("subtasks")
-                .select { filter { eq("user_id", userId) } }
-                .decodeList<SubtaskDto>()
+            // ── Pomodoro sessions: upsert-only ─────────────────────────────────
+            val tSessions = System.currentTimeMillis()
+            val sessions = fetchAllUserRows<PomodoroSessionDto>("pomodoro_sessions", userId)
+            sessions.forEach { db.pomodoroSessionDao().upsert(it.toEntity()) }
+            Log.d(TAG, "Pulled ${sessions.size} pomodoro_sessions in ${System.currentTimeMillis() - tSessions}ms")
+
+            // ── Subtasks: upsert-only ──────────────────────────────────────────
+            val tSubtasks = System.currentTimeMillis()
+            val subtasks = fetchAllUserRows<SubtaskDto>("subtasks", userId)
             subtasks.forEach { db.subtaskDao().upsert(it.toEntity()) }
+            Log.d(TAG, "Pulled ${subtasks.size} subtasks in ${System.currentTimeMillis() - tSubtasks}ms")
 
-            val goals = SupabaseClientProvider.client.from("goals")
-                .select { filter { eq("user_id", userId) } }
-                .decodeList<GoalDto>()
+            // ── Goals: upsert-only ─────────────────────────────────────────────
+            val tGoals = System.currentTimeMillis()
+            val goals = fetchAllUserRows<GoalDto>("goals", userId)
             goals.forEach { db.goalDao().upsert(it.toEntity()) }
+            Log.d(TAG, "Pulled ${goals.size} goals in ${System.currentTimeMillis() - tGoals}ms")
+
+            // ── Routines: clear-then-replace per id (forces NULL overwrite for
+            //    fields that were null on Supabase but non-null locally — pattern
+            //    inherited from former RoutineRepository.pullRoutinesFromSupabase) ──
+            val tRoutines = System.currentTimeMillis()
+            val routines = fetchAllUserRows<RoutineDto>("routines", userId)
+            for (dto in routines) db.routineDao().deleteRoutine(dto.id)
+            for (dto in routines) db.routineDao().upsertRoutine(dto.toEntity())
+            Log.d(TAG, "Pulled ${routines.size} routines in ${System.currentTimeMillis() - tRoutines}ms")
+
+            // ── Routine items: upsert-only ─────────────────────────────────────
+            val tRoutineItems = System.currentTimeMillis()
+            val routineItems = fetchAllUserRows<RoutineItemDto>("routine_items", userId)
+            routineItems.forEach { db.routineDao().upsertRoutineItem(it.toEntity()) }
+            Log.d(TAG, "Pulled ${routineItems.size} routine_items in ${System.currentTimeMillis() - tRoutineItems}ms")
+
+            // ── Day tasks: reconciliation (atomic, sync_queue protected, F1+F2+F3) ─
+            val tTasks = System.currentTimeMillis()
+            val tasks = fetchAllUserRows<DayTaskDto>("day_tasks", userId)
+            val remoteIds = tasks.map { it.id }.toSet()
+
+            db.withTransaction {
+                // F1 — Mobile only ever enqueues "UPSERT" or "DELETE" (verified in SyncEngine).
+                //      "INSERT" filter from desktop port was wrong.
+                val pending = db.syncQueueDao().getAll().filter { it.entityType == "day_tasks" }
+                val pendingUpsertIds = pending.filter { it.operation == "UPSERT" }.map { it.entityId }.toSet()
+                val pendingDeleteIds = pending.filter { it.operation == "DELETE" }.map { it.entityId }.toSet()
+
+                val localIds = db.dayTaskDao().getAllIdsForUser(userId)
+
+                // Delete locals absent from remote, protecting pending upserts (local newer)
+                // and pending deletes (already removed locally, awaiting flush).
+                for (localId in localIds) {
+                    if (localId !in remoteIds &&
+                        localId !in pendingUpsertIds &&
+                        localId !in pendingDeleteIds
+                    ) {
+                        db.dayTaskDao().deleteById(localId)
+                    }
+                }
+
+                // Upsert remote rows, skipping any with pending local mutations
+                // (UPSERT = local more recent ; DELETE = must not re-insert).
+                for (dto in tasks) {
+                    if (dto.id in pendingUpsertIds || dto.id in pendingDeleteIds) continue
+                    db.dayTaskDao().upsert(dto.toEntity())
+                }
+            }
+            Log.d(TAG, "Pulled ${tasks.size} day_tasks in ${System.currentTimeMillis() - tTasks}ms (reconciled)")
 
             SyncStatusManager.setSynced()
-        } catch (_: Exception) {
+            // F7 — Signal first successful pull completion so MainActivity can gate
+            //      its second routine injection deterministically.
+            SyncStatusManager.markFirstPullCompleted()
+        } catch (e: Exception) {
+            // F3 — On any fetch error: NO partial reconciliation, NO firstPullCompleted.
+            Log.e(TAG, "pullSync failed: ${e.message}", e)
             SyncStatusManager.setError()
         }
     }
@@ -179,7 +324,7 @@ object RealtimeSyncManager {
     private fun startPeriodicSync(userId: String, scope: CoroutineScope) {
         scope.launch {
             while (true) {
-                delay(30_000L) // every 30 seconds
+                delay(PERIODIC_INTERVAL_MS)
                 if (SyncStatusManager.status.value != SyncStatusManager.SyncStatus.OFFLINE) {
                     pullSync(userId)
                 }
@@ -198,18 +343,28 @@ object RealtimeSyncManager {
         crossinline onDelete: suspend (Dto) -> Unit
     ) {
         scope.launch {
-            channel.postgresChangeFlow<PostgresAction>("public") {
-                this.table = table
-                filter("user_id", FilterOperator.EQ, userId)
-            }.collect { action ->
-                try {
-                    when (action) {
-                        is PostgresAction.Insert -> onUpsert(action.decodeRecord())
-                        is PostgresAction.Update -> onUpsert(action.decodeRecord())
-                        is PostgresAction.Delete -> onDelete(action.decodeOldRecord())
-                        else -> {}
+            try {
+                channel.postgresChangeFlow<PostgresAction>("public") {
+                    this.table = table
+                    filter("user_id", FilterOperator.EQ, userId)
+                }
+                    .catch { e ->
+                        Log.w(TAG, "Realtime flow error on $table: ${e.message}")
                     }
-                } catch (_: Exception) {}
+                    .collect { action ->
+                        try {
+                            when (action) {
+                                is PostgresAction.Insert -> onUpsert(action.decodeRecord())
+                                is PostgresAction.Update -> onUpsert(action.decodeRecord())
+                                is PostgresAction.Delete -> onDelete(action.decodeOldRecord())
+                                else -> {}
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to apply Realtime action on $table: ${e.message}")
+                        }
+                    }
+            } catch (e: Exception) {
+                Log.w(TAG, "Subscription to $table errored: ${e.message}")
             }
         }
     }

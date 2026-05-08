@@ -20,6 +20,12 @@ object SyncStatusManager {
     private val _conflictEvents = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val conflictEvents: SharedFlow<String> = _conflictEvents.asSharedFlow()
 
+    // Signal that the first pullSync() after authentication has completed successfully.
+    // Used by MainActivity to gate the second routine injection deterministically
+    // instead of relying on a fixed delay.
+    private val _firstPullCompleted = MutableStateFlow(false)
+    val firstPullCompleted: StateFlow<Boolean> = _firstPullCompleted.asStateFlow()
+
     fun setSyncing() { _status.value = SyncStatus.SYNCING }
 
     fun setSynced() {
@@ -32,4 +38,8 @@ object SyncStatusManager {
     fun setError() { _status.value = SyncStatus.ERROR }
 
     fun emitConflict(message: String) { _conflictEvents.tryEmit(message) }
+
+    fun markFirstPullCompleted() { _firstPullCompleted.value = true }
+
+    fun resetFirstPullCompleted() { _firstPullCompleted.value = false }
 }

@@ -5,11 +5,7 @@ import com.agenticfocus.data.dao.DayTaskDao
 import com.agenticfocus.data.dao.RoutineDao
 import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.RoutineEntity
-import com.agenticfocus.data.entity.RoutineItemEntity
 import com.agenticfocus.data.supabase.SupabaseClientProvider
-import com.agenticfocus.data.supabase.dto.DayTaskDto
-import com.agenticfocus.data.supabase.dto.RoutineDto
-import com.agenticfocus.data.supabase.dto.RoutineItemDto
 import com.agenticfocus.data.supabase.dto.toEntity
 import com.agenticfocus.data.sync.SyncEngine
 import io.github.jan.supabase.postgrest.from
@@ -21,43 +17,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class RoutineRepository(
     private val routineDao: RoutineDao,
-    private val dayTaskDao: DayTaskDao,
-    private val syncQueueDao: com.agenticfocus.data.dao.SyncQueueDao? = null
+    private val dayTaskDao: DayTaskDao
 ) {
     private val isInjecting = AtomicBoolean(false)
-
-    suspend fun pullRoutinesFromSupabase(userId: String) {
-        try {
-            // Clear stale sync_queue FIRST — before pulling, to prevent
-            // SyncEngine.flush() from pushing old data back to Supabase.
-            syncQueueDao?.deleteByEntityType("routines")
-            syncQueueDao?.deleteByEntityType("routine_items")
-
-            val routinesResponse = SupabaseClientProvider.client.from("routines")
-                .select { filter { eq("user_id", userId) } }
-            Log.d(TAG, "routines raw: ${routinesResponse.data}")
-            val routines = routinesResponse.decodeList<RoutineDto>()
-            // Delete then re-insert to ensure NULL fields from Supabase overwrite local values.
-            // @Upsert (INSERT OR IGNORE + UPDATE) may skip NULL→non-NULL overwrites.
-            // Safe because we pull ALL user routines — no data loss.
-            for (dto in routines) {
-                routineDao.deleteRoutine(dto.id)
-            }
-            for (dto in routines) {
-                routineDao.upsertRoutine(dto.toEntity())
-            }
-            val itemsResponse = SupabaseClientProvider.client.from("routine_items")
-                .select { filter { eq("user_id", userId) } }
-            Log.d(TAG, "routine_items raw response: ${itemsResponse.data}")
-            val items = itemsResponse.decodeList<RoutineItemDto>()
-            for (dto in items) {
-                routineDao.upsertRoutineItem(dto.toEntity())
-            }
-            Log.d(TAG, "Pulled ${routines.size} routines, ${items.size} items from Supabase")
-        } catch (e: Exception) {
-            Log.w(TAG, "Pull routines failed (offline?): ${e.message}")
-        }
-    }
 
     /** Pull today's routine-injected tasks from Supabase to local DB so the
      *  exists check catches tasks created by the other device. */
