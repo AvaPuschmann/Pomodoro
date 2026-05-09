@@ -9,6 +9,7 @@ import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.GoalEntity
 import com.agenticfocus.data.entity.PomodoroSessionEntity
 import com.agenticfocus.data.entity.RoutineEntity
+import com.agenticfocus.data.entity.RoutineItemEntity
 import com.agenticfocus.data.entity.SubtaskEntity
 import com.agenticfocus.data.entity.SyncQueueEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
@@ -186,6 +187,35 @@ object SyncEngine {
         }
     }
 
+    suspend fun deleteRoutine(id: String) {
+        if (isConnected()) {
+            if (!tryDelete("routines", id)) enqueue("routines", id, "DELETE", "{}")
+        } else {
+            enqueue("routines", id, "DELETE", "{}")
+        }
+    }
+
+    // ── RoutineItem ───────────────────────────────────────────────────────────
+
+    suspend fun upsertRoutineItem(entity: RoutineItemEntity) {
+        val dto = entity.toDto()
+        if (isConnected()) {
+            if (!tryUpsert("routine_items") { SupabaseClientProvider.client.from("routine_items").upsert(dto) }) {
+                enqueue("routine_items", entity.id, "UPSERT", Json.encodeToString(dto))
+            }
+        } else {
+            enqueue("routine_items", entity.id, "UPSERT", Json.encodeToString(dto))
+        }
+    }
+
+    suspend fun deleteRoutineItem(id: String) {
+        if (isConnected()) {
+            if (!tryDelete("routine_items", id)) enqueue("routine_items", id, "DELETE", "{}")
+        } else {
+            enqueue("routine_items", id, "DELETE", "{}")
+        }
+    }
+
     // ── Flush (process offline queue) ─────────────────────────────────────────
 
     suspend fun flush() {
@@ -279,6 +309,10 @@ object SyncEngine {
                 "routines" -> {
                     val dto = Json.decodeFromString<com.agenticfocus.data.supabase.dto.RoutineDto>(entry.payload)
                     SupabaseClientProvider.client.from("routines").upsert(dto)
+                }
+                "routine_items" -> {
+                    val dto = Json.decodeFromString<com.agenticfocus.data.supabase.dto.RoutineItemDto>(entry.payload)
+                    SupabaseClientProvider.client.from("routine_items").upsert(dto)
                 }
                 else -> { /* unknown table — discard */ }
             }

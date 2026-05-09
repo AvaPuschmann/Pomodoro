@@ -38,6 +38,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -54,6 +55,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -75,7 +77,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.widthIn
 import com.agenticfocus.ui.components.ToggleChip
+import com.agenticfocus.ui.components.formatDueDate
 import androidx.core.graphics.toColorInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.agenticfocus.R
@@ -388,36 +392,15 @@ fun DayPlannerScreen(
                 }
             }
 
-            // Input bar: TextField full-width, then 3 buttons below
+            // C3 — Bottom action bar: only 3 buttons (Backlog, Biblio, Tâche)
+            // Removed: free-form "Nouvelle tâche..." text input — task creation now
+            // goes through the dedicated AddTaskForm sheet (Tâche button) for richer
+            // metadata (impact/urgence/date), or the Backlog sheet for backlog tasks.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                OutlinedTextField(
-                    value = newTaskText,
-                    onValueChange = { newTaskText = it },
-                    placeholder = { Text("Nouvelle tâche...", color = SubtleWhite) },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.White,
-                        unfocusedBorderColor = Color.White.copy(alpha = 0.60f),
-                        focusedContainerColor = Color.Black.copy(alpha = 0.50f),
-                        unfocusedContainerColor = Color.Black.copy(alpha = 0.50f),
-                        focusedTextColor = TextWhite,
-                        unfocusedTextColor = TextWhite,
-                        cursorColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                    keyboardActions = KeyboardActions(onDone = {
-                        viewModel.addTask(newTaskText)
-                        newTaskText = ""
-                        focusManager.clearFocus()
-                    })
-                )
-                Spacer(Modifier.height(8.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -468,6 +451,7 @@ fun DayPlannerScreen(
             BacklogSheet(
                 tasks = backlogTasks,
                 selectedDate = selectedDate,
+                onAdd = { name -> viewModel.addToBacklog(name) },
                 onScheduleToday = { task ->
                     viewModel.scheduleFromBacklog(task, selectedDate)
                 },
@@ -511,8 +495,21 @@ fun DayPlannerScreen(
                 currentDate = selectedDate,
                 domains = libraryState.domains,
                 loadSubtasks = { taskId -> viewModel.getSubtasksForTask(taskId) },
-                onSave = { name, note, impact, urgency, scheduledDate, subtasks, originalIds ->
-                    viewModel.updateTaskDetails(task.id, name, note, impact, urgency, scheduledDate, subtasks, originalIds)
+                onSave = { name, note, impact, urgency, scheduledDate, plannedPomodoros, storyPoints, domainId, dueDate, subtasks, originalIds ->
+                    viewModel.updateTaskDetails(
+                        id = task.id,
+                        name = name,
+                        note = note,
+                        impact = impact,
+                        urgency = urgency,
+                        scheduledDate = scheduledDate,
+                        plannedPomodoros = plannedPomodoros,
+                        storyPoints = storyPoints,
+                        domainId = domainId,
+                        dueDate = dueDate,
+                        newSubtasks = subtasks,
+                        originalSubtaskIds = originalIds
+                    )
                     scope.launch { editTaskSheetState.hide() }.invokeOnCompletion { editingTask = null }
                 },
                 onDismiss = {
@@ -775,7 +772,19 @@ private fun EditTaskForm(
     currentDate: LocalDate,
     domains: List<DomainEntity> = emptyList(),
     loadSubtasks: suspend (String) -> List<SubtaskEntity>,
-    onSave: (name: String, note: String?, impact: String?, urgency: String?, scheduledDate: LocalDate?, subtasks: List<SubtaskEntity>, originalSubtaskIds: Set<String>) -> Unit,
+    onSave: (
+        name: String,
+        note: String?,
+        impact: String?,
+        urgency: String?,
+        scheduledDate: LocalDate?,
+        plannedPomodoros: Int,
+        storyPoints: Int,
+        domainId: String?,
+        dueDate: Long?,
+        subtasks: List<SubtaskEntity>,
+        originalSubtaskIds: Set<String>
+    ) -> Unit,
     onDismiss: () -> Unit
 ) {
     var name by remember { mutableStateOf(task.name) }
@@ -784,6 +793,14 @@ private fun EditTaskForm(
     var urgency by remember { mutableStateOf(task.urgency) }
     var scheduledDate by remember { mutableStateOf<LocalDate?>(currentDate) }
     var showDatePicker by remember { mutableStateOf(false) }
+
+    // C1 — fields previously read-only on mobile, now editable to align with desktop
+    var plannedPomodoros by remember { mutableStateOf(task.plannedPomodoros) }
+    var storyPointsText by remember { mutableStateOf(task.storyPoints.toString()) }
+    var selectedDomainId by remember { mutableStateOf(task.domainId) }
+    var domainMenuExpanded by remember { mutableStateOf(false) }
+    var dueDate by remember { mutableStateOf(task.dueDate) }
+    var showDueDatePicker by remember { mutableStateOf(false) }
 
     var subtasks by remember { mutableStateOf<List<SubtaskEntity>>(emptyList()) }
     var originalSubtaskIds by remember { mutableStateOf<Set<String>>(emptySet()) }
@@ -794,6 +811,8 @@ private fun EditTaskForm(
         originalSubtaskIds = loaded.map { it.id }.toSet()
     }
 
+    val selectedDomain = domains.firstOrNull { it.id == selectedDomainId }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -803,54 +822,6 @@ private fun EditTaskForm(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text("Modifier la tâche", color = TextWhite, fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-
-        // Domain + story points — read-only card
-        val templateDomain = domains.firstOrNull { it.id == task.domainId }
-        val templateDomainColor = templateDomain?.let {
-            runCatching { Color(it.color.toColorInt()) }.getOrDefault(SubtleWhite)
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(GlassWhite, RoundedCornerShape(12.dp))
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Domain
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Domaine", color = SubtleWhite, fontSize = 11.sp)
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (templateDomainColor != null) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(templateDomainColor, RoundedCornerShape(5.dp))
-                        )
-                    }
-                    Text(
-                        text = templateDomain?.name ?: "—",
-                        color = TextWhite,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-            // Story points
-            Column(
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-                Text("Points de valeur", color = SubtleWhite, fontSize = 11.sp)
-                Text(
-                    text = if (task.storyPoints > 0) "${task.storyPoints} pts" else "—",
-                    color = TextWhite,
-                    fontSize = 14.sp
-                )
-            }
-        }
 
         OutlinedTextField(
             value = name,
@@ -897,6 +868,146 @@ private fun EditTaskForm(
             }
         }
 
+        // C1 — Pomodoros planifiés (editable, parity with desktop)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Pomodoros planifiés", color = SubtleWhite, fontSize = 13.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                IconButton(
+                    onClick = { plannedPomodoros = (plannedPomodoros - 1).coerceAtLeast(task.completedPomodoros.coerceAtLeast(0)) },
+                    enabled = plannedPomodoros > task.completedPomodoros && plannedPomodoros > 0
+                ) {
+                    Text("−", color = TextWhite, fontSize = 18.sp)
+                }
+                Text(
+                    text = if (plannedPomodoros == 0) "—" else "$plannedPomodoros 🍅",
+                    color = TextWhite,
+                    fontSize = 14.sp,
+                    modifier = Modifier.widthIn(min = 60.dp)
+                )
+                IconButton(
+                    onClick = { plannedPomodoros = (plannedPomodoros + 1).coerceAtMost(6) },
+                    enabled = plannedPomodoros < 6
+                ) {
+                    Text("+", color = TextWhite, fontSize = 18.sp)
+                }
+            }
+        }
+
+        // C1 — Story points (editable number input, parity with desktop)
+        OutlinedTextField(
+            value = storyPointsText,
+            onValueChange = { newVal ->
+                if (newVal.isEmpty() || newVal.all { it.isDigit() }) {
+                    storyPointsText = newVal.take(4)
+                }
+            },
+            label = { Text("Story points", color = SubtleWhite) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = TomatoRed, unfocusedBorderColor = GlassWhite,
+                focusedContainerColor = GlassWhite, unfocusedContainerColor = GlassWhite,
+                focusedTextColor = TextWhite, unfocusedTextColor = TextWhite, cursorColor = TomatoRed
+            ),
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
+        )
+
+        // C1 — Domain dropdown (editable, parity with desktop)
+        // Note: ExposedDropdownMenu has known focus issues inside ModalBottomSheet.
+        // Pattern: clickable Surface + standard DropdownMenu — robust in any container.
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Domaine", color = SubtleWhite, fontSize = 13.sp)
+            Box {
+                Surface(
+                    color = GlassWhite,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { domainMenuExpanded = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (selectedDomain != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .background(
+                                            runCatching { Color(selectedDomain.color.toColorInt()) }
+                                                .getOrDefault(SubtleWhite),
+                                            RoundedCornerShape(5.dp)
+                                        )
+                                )
+                            }
+                            Text(
+                                text = selectedDomain?.name ?: "Aucun domaine",
+                                color = TextWhite,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Text("▾", color = SubtleWhite, fontSize = 14.sp)
+                    }
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = domainMenuExpanded,
+                    onDismissRequest = { domainMenuExpanded = false },
+                    modifier = Modifier.background(Color(0xFF2C2C2E))
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Aucun domaine", color = TextWhite) },
+                        onClick = { selectedDomainId = null; domainMenuExpanded = false }
+                    )
+                    domains.forEach { d ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(
+                                                runCatching { Color(d.color.toColorInt()) }
+                                                    .getOrDefault(SubtleWhite),
+                                                RoundedCornerShape(5.dp)
+                                            )
+                                    )
+                                    Text(d.name, color = TextWhite)
+                                }
+                            },
+                            onClick = { selectedDomainId = d.id; domainMenuExpanded = false }
+                        )
+                    }
+                }
+            }
+        }
+
+        // C1 — Date limite (editable date picker, parity with desktop)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Date limite", color = SubtleWhite, fontSize = 13.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToggleChip(
+                    label = dueDate?.let { formatDueDate(it) } ?: "Aucune",
+                    selected = dueDate != null,
+                    selectedColor = Color(0xFFE53935),
+                    onClick = { showDueDatePicker = true }
+                )
+                if (dueDate != null) {
+                    TextButton(onClick = { dueDate = null }) { Text("×", color = SubtleWhite, fontSize = 16.sp) }
+                }
+            }
+        }
+
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Planifier pour", color = SubtleWhite, fontSize = 13.sp)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -932,7 +1043,21 @@ private fun EditTaskForm(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
             TextButton(onClick = onDismiss) { Text("Annuler", color = SubtleWhite) }
             Button(
-                onClick = { if (name.isNotBlank()) onSave(name.trim(), note.takeIf { it.isNotBlank() }, impact, urgency, scheduledDate, subtasks, originalSubtaskIds) },
+                onClick = {
+                    if (name.isNotBlank()) onSave(
+                        name.trim(),
+                        note.takeIf { it.isNotBlank() },
+                        impact,
+                        urgency,
+                        scheduledDate,
+                        plannedPomodoros,
+                        storyPointsText.toIntOrNull()?.coerceIn(0, 9999) ?: 0,
+                        selectedDomainId,
+                        dueDate,
+                        subtasks,
+                        originalSubtaskIds
+                    )
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = TomatoRed),
                 enabled = name.isNotBlank()
             ) { Text("Enregistrer", color = Color.White) }
@@ -953,6 +1078,22 @@ private fun EditTaskForm(
                 }) { Text("OK") }
             },
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Annuler") } }
+        ) { DatePicker(state = datePickerState) }
+    }
+
+    // C1 — Date limite picker (parity with desktop)
+    if (showDueDatePicker) {
+        val initialMillis = dueDate
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        DatePickerDialog(
+            onDismissRequest = { showDueDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dueDate = datePickerState.selectedDateMillis
+                    showDueDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDueDatePicker = false }) { Text("Annuler") } }
         ) { DatePicker(state = datePickerState) }
     }
 }
@@ -1093,11 +1234,20 @@ private fun LibraryPicker(
     onSelect: (TaskTemplateEntity) -> Unit
 ) {
     var selectedDomainId by remember { mutableStateOf<String?>(null) }
+    // D2 — full-text search on template titles (parity with desktop LibraryPicker)
+    var searchQuery by remember { mutableStateOf("") }
 
-    val visibleTemplates = if (selectedDomainId == null)
+    val normalizedQuery = searchQuery.trim().lowercase()
+    val isSearching = normalizedQuery.isNotEmpty()
+
+    val baseTemplates = if (selectedDomainId == null)
         templatesByDomain.values.flatten()
     else
         templatesByDomain[selectedDomainId] ?: emptyList()
+
+    val visibleTemplates = if (isSearching)
+        baseTemplates.filter { it.title.lowercase().contains(normalizedQuery) }
+    else baseTemplates
 
     Column(modifier = Modifier.padding(bottom = 24.dp)) {
         Text(
@@ -1107,6 +1257,37 @@ private fun LibraryPicker(
             fontSize = 16.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
+
+        // D2 — Search bar (full-text filter on template titles)
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Rechercher…", color = SubtleWhite) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = TomatoRed,
+                unfocusedBorderColor = GlassWhite,
+                focusedContainerColor = GlassWhite,
+                unfocusedContainerColor = GlassWhite,
+                focusedTextColor = TextWhite,
+                unfocusedTextColor = TextWhite,
+                cursorColor = TomatoRed
+            ),
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            trailingIcon = {
+                if (searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(36.dp)) {
+                        Text("×", color = SubtleWhite, fontSize = 16.sp)
+                    }
+                }
+            }
+        )
+
+        Spacer(Modifier.height(4.dp))
 
         // Domain filter chips
         LazyRow(
@@ -1211,11 +1392,14 @@ private fun LibraryPicker(
 private fun BacklogSheet(
     tasks: List<com.agenticfocus.viewmodel.DayTask>,
     selectedDate: LocalDate,
+    onAdd: (String) -> Unit,
     onScheduleToday: (com.agenticfocus.viewmodel.DayTask) -> Unit,
     onScheduleDate: (com.agenticfocus.viewmodel.DayTask, LocalDate) -> Unit,
     onDelete: (com.agenticfocus.viewmodel.DayTask) -> Unit
 ) {
     var schedulingTask by remember { mutableStateOf<com.agenticfocus.viewmodel.DayTask?>(null) }
+    var newBacklogTitle by remember { mutableStateOf("") }
+    val focusManager = LocalFocusManager.current
 
     Column(
         modifier = Modifier
@@ -1230,12 +1414,65 @@ private fun BacklogSheet(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
+        // C2 — Add new backlog task input (parity with desktop)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedTextField(
+                value = newBacklogTitle,
+                onValueChange = { newBacklogTitle = it },
+                placeholder = { Text("Nouvelle idée à reporter…", color = SubtleWhite) },
+                modifier = Modifier.weight(1f),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = TomatoRed, unfocusedBorderColor = GlassWhite,
+                    focusedContainerColor = GlassWhite, unfocusedContainerColor = GlassWhite,
+                    focusedTextColor = TextWhite, unfocusedTextColor = TextWhite, cursorColor = TomatoRed
+                ),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    val trimmed = newBacklogTitle.trim()
+                    if (trimmed.isNotEmpty()) {
+                        onAdd(trimmed)
+                        newBacklogTitle = ""
+                    }
+                    focusManager.clearFocus()
+                })
+            )
+            Button(
+                onClick = {
+                    val trimmed = newBacklogTitle.trim()
+                    if (trimmed.isNotEmpty()) {
+                        onAdd(trimmed)
+                        newBacklogTitle = ""
+                        focusManager.clearFocus()
+                    }
+                },
+                enabled = newBacklogTitle.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = TomatoRed,
+                    disabledContainerColor = TomatoRed.copy(alpha = 0.3f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+            ) {
+                Text("Ajouter", color = Color.White, fontSize = 13.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         if (tasks.isEmpty()) {
             Text(
-                text = "Aucune tâche en attente.\nUtilise 📋 → Backlog pour ajouter des idées sans date.",
+                text = "Aucune tâche en attente.",
                 color = SubtleWhite,
                 fontSize = 14.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)
             )
         } else {
             LazyColumn(

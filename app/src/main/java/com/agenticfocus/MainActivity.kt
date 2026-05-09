@@ -57,6 +57,7 @@ import com.agenticfocus.viewmodel.AuthViewModel
 import com.agenticfocus.viewmodel.AuthViewModelFactory
 import com.agenticfocus.viewmodel.DayPlannerViewModel
 import com.agenticfocus.viewmodel.LibraryViewModel
+import com.agenticfocus.viewmodel.RoutineViewModel
 import com.agenticfocus.viewmodel.StatsViewModel
 import com.agenticfocus.data.db.AppDatabase
 import com.agenticfocus.data.repository.RoutineRepository
@@ -171,8 +172,14 @@ class MainActivity : ComponentActivity() {
 
                             val dayPlannerVM: DayPlannerViewModel = viewModel()
                             val libraryVM: LibraryViewModel = viewModel()
+                            val routineVM: RoutineViewModel = viewModel()
                             val statsVM: StatsViewModel = viewModel()
                             var selectedTab by remember { mutableStateOf(Tab.TIMER) }
+
+                            // D3 — Wire RoutineViewModel to current user (gates auto-create on firstPullCompleted)
+                            LaunchedEffect(userId) {
+                                routineVM.setUserId(userId)
+                            }
 
                             val snackbarHostState = remember { SnackbarHostState() }
                             val coroutineScope = rememberCoroutineScope()
@@ -215,7 +222,7 @@ class MainActivity : ComponentActivity() {
                                         contentPadding = innerPadding
                                     )
                                     Tab.PLANNER  -> DayPlannerScreen(dayPlannerVM, libraryVM, contentPadding = innerPadding)
-                                    Tab.LIBRARY  -> LibraryScreen(libraryVM, contentPadding = innerPadding)
+                                    Tab.LIBRARY  -> LibraryScreen(libraryVM, routineVM, contentPadding = innerPadding)
                                     Tab.STATS    -> StatsScreen(statsVM, contentPadding = innerPadding)
                                     Tab.SETTINGS -> SettingsScreen(
                                         onSignOut = { authVM.signOut() },

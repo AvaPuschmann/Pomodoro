@@ -270,14 +270,33 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
         }
     }
 
-    fun updateTaskDetails(id: String, name: String, note: String?, impact: String?, urgency: String?, scheduledDate: LocalDate?, newSubtasks: List<SubtaskEntity> = emptyList(), originalSubtaskIds: Set<String> = emptySet()) {
+    fun updateTaskDetails(
+        id: String,
+        name: String,
+        note: String?,
+        impact: String?,
+        urgency: String?,
+        scheduledDate: LocalDate?,
+        plannedPomodoros: Int? = null,
+        storyPoints: Int? = null,
+        domainId: String? = null,
+        dueDate: Long? = null,
+        newSubtasks: List<SubtaskEntity> = emptyList(),
+        originalSubtaskIds: Set<String> = emptySet()
+    ) {
         if (name.isBlank()) return
         val updatedFields: (com.agenticfocus.viewmodel.DayTask) -> com.agenticfocus.viewmodel.DayTask = { task ->
+            // Coerce planned to never go below completedPomodoros (avoid invariant break)
+            val coercedPlanned = plannedPomodoros?.coerceAtLeast(task.completedPomodoros)
             task.copy(
                 name = name.trim(),
                 note = note?.takeIf { it.isNotBlank() },
                 impact = impact,
-                urgency = urgency
+                urgency = urgency,
+                plannedPomodoros = coercedPlanned ?: task.plannedPomodoros,
+                storyPoints = storyPoints ?: task.storyPoints,
+                domainId = domainId,
+                dueDate = dueDate
             )
         }
         when {
@@ -327,7 +346,24 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
     fun toggleCompletion(id: String) {
         _state.update { s ->
             s.copy(tasks = s.tasks.map { task ->
-                if (task.id == id) task.copy(isCompleted = !task.isCompleted) else task
+                if (task.id == id) {
+                    val newIsCompleted = !task.isCompleted
+                    // When unchecking a task whose pomodoros are at or above planned,
+                    // bump planned by 1 so the task actually moves to "Planifiées"
+                    // (otherwise the doneTasks filter keeps it in "Terminées" because
+                    // completedPomodoros >= plannedPomodoros). User can then do one
+                    // more pomodoro to genuinely re-mark it complete.
+                    val newPlanned = if (
+                        !newIsCompleted &&
+                        task.plannedPomodoros > 0 &&
+                        task.completedPomodoros >= task.plannedPomodoros
+                    ) {
+                        task.completedPomodoros + 1
+                    } else {
+                        task.plannedPomodoros
+                    }
+                    task.copy(isCompleted = newIsCompleted, plannedPomodoros = newPlanned)
+                } else task
             })
         }
         persistAll()

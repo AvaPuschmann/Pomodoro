@@ -18,6 +18,16 @@ interface RoutineDao {
     @Query("SELECT * FROM routines WHERE user_id = :userId AND is_active = 1 ORDER BY type")
     suspend fun getActiveRoutines(userId: String): List<RoutineEntity>
 
+    // D3 — F4: needed by ensureMorningEveningRoutinesExist; getActiveRoutines filters is_active=1
+    //         and would miss inactive routines, leading to duplicate creation.
+    @Query("SELECT * FROM routines WHERE user_id = :userId ORDER BY type")
+    suspend fun getAllRoutines(userId: String): List<RoutineEntity>
+
+    // D3 — F10: reactive observation of items for given routines so the UI auto-updates
+    //          when Realtime delivers an INSERT/UPDATE/DELETE on routine_items.
+    @Query("SELECT * FROM routine_items WHERE routine_id IN (:routineIds) ORDER BY routine_id, position")
+    fun observeRoutineItemsForRoutines(routineIds: List<String>): Flow<List<RoutineItemEntity>>
+
     @Upsert
     suspend fun upsertRoutine(routine: RoutineEntity)
 

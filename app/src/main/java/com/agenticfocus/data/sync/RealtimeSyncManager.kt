@@ -195,17 +195,26 @@ object RealtimeSyncManager {
         val db = db ?: return
         try {
             // ── Domains: clear-then-replace (preserve invariant for orphan cleanup, F5) ─
+            // C1 follow-up : wrap in withTransaction so Room Flow observers don't see
+            // an intermediate empty state between deleteAll() and the inserts (was
+            // causing Library tab + EditTaskForm domain dropdown to flash empty for
+            // hundreds of ms after every pullSync — every 5 min, onResume, reconnect).
             val tDomains = System.currentTimeMillis()
             val domains = fetchAllUserRows<DomainDto>("domains", userId)
-            db.domainDao().deleteAll()
-            domains.forEach { db.domainDao().insert(it.toEntity()) }
+            db.withTransaction {
+                db.domainDao().deleteAll()
+                domains.forEach { db.domainDao().insert(it.toEntity()) }
+            }
             Log.d(TAG, "Pulled ${domains.size} domains in ${System.currentTimeMillis() - tDomains}ms")
 
             // ── Task templates: clear-then-replace (referential integrity with domains, F5) ─
+            // Same withTransaction guarantee as domains (atomic visibility).
             val tTemplates = System.currentTimeMillis()
             val templates = fetchAllUserRows<TaskTemplateDto>("task_templates", userId)
-            db.taskTemplateDao().deleteAll()
-            templates.forEach { db.taskTemplateDao().insert(it.toEntity()) }
+            db.withTransaction {
+                db.taskTemplateDao().deleteAll()
+                templates.forEach { db.taskTemplateDao().insert(it.toEntity()) }
+            }
             Log.d(TAG, "Pulled ${templates.size} task_templates in ${System.currentTimeMillis() - tTemplates}ms")
 
             // ── Pomodoro sessions: upsert-only ─────────────────────────────────
@@ -228,11 +237,14 @@ object RealtimeSyncManager {
 
             // ── Routines: clear-then-replace per id (forces NULL overwrite for
             //    fields that were null on Supabase but non-null locally — pattern
-            //    inherited from former RoutineRepository.pullRoutinesFromSupabase) ──
+            //    inherited from former RoutineRepository.pullRoutinesFromSupabase).
+            //    Wrapped in withTransaction so Flow observers see only the final state.
             val tRoutines = System.currentTimeMillis()
             val routines = fetchAllUserRows<RoutineDto>("routines", userId)
-            for (dto in routines) db.routineDao().deleteRoutine(dto.id)
-            for (dto in routines) db.routineDao().upsertRoutine(dto.toEntity())
+            db.withTransaction {
+                for (dto in routines) db.routineDao().deleteRoutine(dto.id)
+                for (dto in routines) db.routineDao().upsertRoutine(dto.toEntity())
+            }
             Log.d(TAG, "Pulled ${routines.size} routines in ${System.currentTimeMillis() - tRoutines}ms")
 
             // ── Routine items: upsert-only ─────────────────────────────────────

@@ -79,6 +79,7 @@ import com.agenticfocus.ui.theme.SubtleWhite
 import com.agenticfocus.ui.theme.TextWhite
 import com.agenticfocus.ui.theme.TomatoRed
 import com.agenticfocus.viewmodel.LibraryViewModel
+import com.agenticfocus.viewmodel.RoutineViewModel
 
 // Palette de couleurs proposées pour les domaines
 private val domainColorPalette = listOf(
@@ -93,14 +94,65 @@ private val domainColorPalette = listOf(
 @Composable
 fun LibraryScreen(
     viewModel: LibraryViewModel,
+    routineViewModel: RoutineViewModel,
     contentPadding: PaddingValues = PaddingValues()
 ) {
+    // D3 — F2: nav swap au ROOT du composable, AVANT le rendu Library, pour éviter
+    //        nested LazyColumn et permettre des écrans imbriqués propres.
+    var libraryNav by rememberSaveable { mutableStateOf("LIBRARY") }
+    var editingRoutineId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    when (libraryNav) {
+        "ROUTINES_LIST" -> {
+            RoutinesScreen(
+                viewModel = routineViewModel,
+                onSelectRoutine = { id -> editingRoutineId = id; libraryNav = "ROUTINE_EDITOR" },
+                onBack = { libraryNav = "LIBRARY" },
+                contentPadding = contentPadding
+            )
+            return
+        }
+        "ROUTINE_EDITOR" -> {
+            val id = editingRoutineId
+            if (id != null) {
+                RoutineEditorScreen(
+                    routineId = id,
+                    routineViewModel = routineViewModel,
+                    libraryViewModel = viewModel,
+                    onBack = { libraryNav = "ROUTINES_LIST"; editingRoutineId = null },
+                    contentPadding = contentPadding
+                )
+                return
+            } else {
+                libraryNav = "ROUTINES_LIST"  // safety fallback
+            }
+        }
+        // "LIBRARY" — fall through to existing rendering
+    }
+
     val state by viewModel.state.collectAsStateWithLifecycle()
     var showAddTemplateDialog by rememberSaveable { mutableStateOf(false) }
     var showAddDomainDialog by rememberSaveable { mutableStateOf(false) }
     var editingDomain by remember { mutableStateOf<DomainEntity?>(null) }
     var editingTemplate by remember { mutableStateOf<TaskTemplateEntity?>(null) }
     val expandedDomains = remember { mutableStateOf(setOf<String>()) }
+    // D2 — Full-text search on template titles (parity with desktop LibraryPicker)
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+
+    val isSearching = searchQuery.trim().isNotBlank()
+    val normalizedQuery = searchQuery.trim().lowercase()
+    val filteredTemplatesByDomain: Map<String, List<TaskTemplateEntity>> = remember(state, searchQuery) {
+        if (!isSearching) state.templatesByDomain
+        else state.templatesByDomain.mapValues { (_, templates) ->
+            templates.filter { it.title.lowercase().contains(normalizedQuery) }
+        }
+    }
+    val visibleDomains: List<DomainEntity> = remember(state, searchQuery) {
+        if (!isSearching) state.domains
+        else state.domains.filter { (filteredTemplatesByDomain[it.id]?.isNotEmpty() == true) }
+    }
+    // Auto-expand all matching domains while searching
+    val displayExpanded: Set<String> = if (isSearching) visibleDomains.map { it.id }.toSet() else expandedDomains.value
 
     Box(modifier = Modifier.fillMaxSize()) {
         Image(
@@ -136,13 +188,76 @@ fun LibraryScreen(
                 )
             }
 
+            // D2 — Search bar (full-text filter on template titles)
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Rechercher…", color = SubtleWhite) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = TomatoRed,
+                    unfocusedBorderColor = GlassWhite,
+                    focusedContainerColor = GlassWhite,
+                    unfocusedContainerColor = GlassWhite,
+                    focusedTextColor = TextWhite,
+                    unfocusedTextColor = TextWhite,
+                    cursorColor = TomatoRed
+                ),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(36.dp)) {
+                            Text("×", color = SubtleWhite, fontSize = 16.sp)
+                        }
+                    }
+                }
+            )
+
+            if (isSearching && visibleDomains.isEmpty()) {
+                Text(
+                    text = "Aucun résultat pour « $searchQuery »",
+                    color = SubtleWhite,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 24.dp)
+                )
+            }
+
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                items(state.domains, key = { it.id }) { domain ->
-                    val templates = state.templatesByDomain[domain.id] ?: emptyList()
-                    val isExpanded = domain.id in expandedDomains.value
+                // D3 — F1: Routines entry must be wrapped in `item { ... }` since LazyColumn
+                //         scope rejects bare composables. Hidden while searching to keep results clean.
+                if (!isSearching) {
+                    item(key = "routines_entry") {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 0.dp, vertical = 6.dp)
+                                .clickable { libraryNav = "ROUTINES_LIST" },
+                            color = Color.Black.copy(alpha = 0.50f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("☀️🌙  Mes Routines", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                Text("›", color = SubtleWhite, fontSize = 18.sp)
+                            }
+                        }
+                    }
+                }
+
+                items(visibleDomains, key = { it.id }) { domain ->
+                    val templates = filteredTemplatesByDomain[domain.id] ?: emptyList()
+                    val isExpanded = domain.id in displayExpanded
 
                     Surface(
                         modifier = Modifier
