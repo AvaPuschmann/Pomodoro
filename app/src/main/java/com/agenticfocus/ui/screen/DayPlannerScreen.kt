@@ -529,8 +529,19 @@ fun DayPlannerScreen(
             AddTaskForm(
                 initialName = newTaskText,
                 initialDate = selectedDate,
-                onAdd = { name, impact, urgency, scheduledDate ->
-                    viewModel.addTask(name, impact, urgency, scheduledDate)
+                domains = libraryState.domains,
+                onAdd = { name, impact, urgency, scheduledDate, note, plannedPomodoros, storyPoints, domainId, dueDate ->
+                    viewModel.addTask(
+                        name = name,
+                        impact = impact,
+                        urgency = urgency,
+                        scheduledDate = scheduledDate,
+                        note = note,
+                        plannedPomodoros = plannedPomodoros,
+                        storyPoints = storyPoints,
+                        domainId = domainId,
+                        dueDate = dueDate
+                    )
                     newTaskText = ""
                     scope.launch { addTaskSheetState.hide() }.invokeOnCompletion {
                         showAddTaskSheet = false
@@ -623,14 +634,36 @@ private fun formatRelativeTime(timestampMs: Long): String {
 private fun AddTaskForm(
     initialName: String,
     initialDate: LocalDate,
-    onAdd: (name: String, impact: String?, urgency: String?, scheduledDate: LocalDate?) -> Unit,
+    domains: List<DomainEntity> = emptyList(),
+    onAdd: (
+        name: String,
+        impact: String?,
+        urgency: String?,
+        scheduledDate: LocalDate?,
+        note: String?,
+        plannedPomodoros: Int,
+        storyPoints: Int,
+        domainId: String?,
+        dueDate: Long?
+    ) -> Unit,
     onDismiss: () -> Unit
 ) {
     var name by remember { mutableStateOf(initialName) }
+    var note by remember { mutableStateOf("") }
     var impact by remember { mutableStateOf<String?>(null) }
     var urgency by remember { mutableStateOf<String?>(null) }
     var scheduledDate by remember { mutableStateOf<LocalDate?>(initialDate) }
     var showDatePicker by remember { mutableStateOf(false) }
+
+    // Bug 2 — fields aligned with EditTaskForm
+    var plannedPomodoros by remember { mutableStateOf(1) }
+    var storyPointsText by remember { mutableStateOf("0") }
+    var selectedDomainId by remember { mutableStateOf<String?>(null) }
+    var domainMenuExpanded by remember { mutableStateOf(false) }
+    var dueDate by remember { mutableStateOf<Long?>(null) }
+    var showDueDatePicker by remember { mutableStateOf(false) }
+
+    val selectedDomain = domains.firstOrNull { it.id == selectedDomainId }
 
     Column(
         modifier = Modifier
@@ -651,6 +684,7 @@ private fun AddTaskForm(
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
+            label = { Text("Nom *", color = SubtleWhite) },
             placeholder = { Text("Nom de la tâche", color = SubtleWhite) },
             modifier = Modifier.fillMaxWidth(),
             colors = OutlinedTextFieldDefaults.colors(
@@ -664,6 +698,22 @@ private fun AddTaskForm(
             ),
             shape = RoundedCornerShape(12.dp),
             singleLine = true
+        )
+
+        // Note (parity with EditTaskForm)
+        OutlinedTextField(
+            value = note,
+            onValueChange = { note = it },
+            label = { Text("Note (optionnel)", color = SubtleWhite) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = TomatoRed, unfocusedBorderColor = GlassWhite,
+                focusedContainerColor = GlassWhite, unfocusedContainerColor = GlassWhite,
+                focusedTextColor = TextWhite, unfocusedTextColor = TextWhite, cursorColor = TomatoRed
+            ),
+            shape = RoundedCornerShape(12.dp),
+            minLines = 2,
+            maxLines = 4
         )
 
         // Impact
@@ -704,6 +754,144 @@ private fun AddTaskForm(
             }
         }
 
+        // Pomodoros planifiés (parity with EditTaskForm)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Pomodoros planifiés", color = SubtleWhite, fontSize = 13.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                IconButton(
+                    onClick = { plannedPomodoros = (plannedPomodoros - 1).coerceAtLeast(0) },
+                    enabled = plannedPomodoros > 0
+                ) {
+                    Text("−", color = TextWhite, fontSize = 18.sp)
+                }
+                Text(
+                    text = if (plannedPomodoros == 0) "—" else "$plannedPomodoros 🍅",
+                    color = TextWhite,
+                    fontSize = 14.sp,
+                    modifier = Modifier.widthIn(min = 60.dp)
+                )
+                IconButton(
+                    onClick = { plannedPomodoros = (plannedPomodoros + 1).coerceAtMost(6) },
+                    enabled = plannedPomodoros < 6
+                ) {
+                    Text("+", color = TextWhite, fontSize = 18.sp)
+                }
+            }
+        }
+
+        // Story points (parity with EditTaskForm)
+        OutlinedTextField(
+            value = storyPointsText,
+            onValueChange = { newVal ->
+                if (newVal.isEmpty() || newVal.all { it.isDigit() }) {
+                    storyPointsText = newVal.take(4)
+                }
+            },
+            label = { Text("Story points", color = SubtleWhite) },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = TomatoRed, unfocusedBorderColor = GlassWhite,
+                focusedContainerColor = GlassWhite, unfocusedContainerColor = GlassWhite,
+                focusedTextColor = TextWhite, unfocusedTextColor = TextWhite, cursorColor = TomatoRed
+            ),
+            shape = RoundedCornerShape(12.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next)
+        )
+
+        // Domaine (parity with EditTaskForm — clickable Surface + DropdownMenu, robust in BottomSheet)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Domaine", color = SubtleWhite, fontSize = 13.sp)
+            Box {
+                Surface(
+                    color = GlassWhite,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { domainMenuExpanded = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (selectedDomain != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(10.dp)
+                                        .background(
+                                            runCatching { Color(selectedDomain.color.toColorInt()) }
+                                                .getOrDefault(SubtleWhite),
+                                            RoundedCornerShape(5.dp)
+                                        )
+                                )
+                            }
+                            Text(
+                                text = selectedDomain?.name ?: "Aucun domaine",
+                                color = TextWhite,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Text("▾", color = SubtleWhite, fontSize = 14.sp)
+                    }
+                }
+                androidx.compose.material3.DropdownMenu(
+                    expanded = domainMenuExpanded,
+                    onDismissRequest = { domainMenuExpanded = false },
+                    modifier = Modifier.background(Color(0xFF2C2C2E))
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Aucun domaine", color = TextWhite) },
+                        onClick = { selectedDomainId = null; domainMenuExpanded = false }
+                    )
+                    domains.forEach { d ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(10.dp)
+                                            .background(
+                                                runCatching { Color(d.color.toColorInt()) }
+                                                    .getOrDefault(SubtleWhite),
+                                                RoundedCornerShape(5.dp)
+                                            )
+                                    )
+                                    Text(d.name, color = TextWhite)
+                                }
+                            },
+                            onClick = { selectedDomainId = d.id; domainMenuExpanded = false }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Date limite (parity with EditTaskForm)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Date limite", color = SubtleWhite, fontSize = 13.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToggleChip(
+                    label = dueDate?.let { formatDueDate(it) } ?: "Aucune",
+                    selected = dueDate != null,
+                    selectedColor = Color(0xFFE53935),
+                    onClick = { showDueDatePicker = true }
+                )
+                if (dueDate != null) {
+                    TextButton(onClick = { dueDate = null }) { Text("×", color = SubtleWhite, fontSize = 16.sp) }
+                }
+            }
+        }
+
         // Planifier pour
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Planifier pour", color = SubtleWhite, fontSize = 13.sp)
@@ -734,7 +922,19 @@ private fun AddTaskForm(
                 Text("Annuler", color = SubtleWhite)
             }
             Button(
-                onClick = { if (name.isNotBlank()) onAdd(name.trim(), impact, urgency, scheduledDate) },
+                onClick = {
+                    if (name.isNotBlank()) onAdd(
+                        name.trim(),
+                        impact,
+                        urgency,
+                        scheduledDate,
+                        note.takeIf { it.isNotBlank() },
+                        plannedPomodoros,
+                        storyPointsText.toIntOrNull()?.coerceIn(0, 9999) ?: 0,
+                        selectedDomainId,
+                        dueDate
+                    )
+                },
                 colors = ButtonDefaults.buttonColors(containerColor = TomatoRed),
                 enabled = name.isNotBlank()
             ) {
@@ -762,6 +962,21 @@ private fun AddTaskForm(
         ) {
             DatePicker(state = datePickerState)
         }
+    }
+
+    // Bug 2 — Date limite picker (parity with EditTaskForm)
+    if (showDueDatePicker) {
+        val datePickerState = rememberDatePickerState(initialSelectedDateMillis = dueDate)
+        DatePickerDialog(
+            onDismissRequest = { showDueDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dueDate = datePickerState.selectedDateMillis
+                    showDueDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = { TextButton(onClick = { showDueDatePicker = false }) { Text("Annuler") } }
+        ) { DatePicker(state = datePickerState) }
     }
 }
 

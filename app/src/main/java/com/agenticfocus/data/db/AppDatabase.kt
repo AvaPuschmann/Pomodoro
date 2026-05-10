@@ -37,7 +37,7 @@ import com.agenticfocus.data.entity.TaskTemplateEntity
         RoutineEntity::class,
         RoutineItemEntity::class
     ],
-    version = 13,
+    version = 15,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -227,6 +227,38 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // No-op migration: schema SQL unchanged from v13. The version bump exists
+        // only to refresh Room's identity hash after we added @ColumnInfo(defaultValue)
+        // and @Entity(indices=…) on DayTaskEntity to mirror what previous migrations
+        // had already created in SQL. Without the bump, Room sees the old hash in
+        // room_master_table vs the new entity-derived hash → IllegalStateException
+        // "Room cannot verify the data integrity" on devices with the v13 DB.
+        // Fresh installs are unaffected (DB is created from current entity).
+        private val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Intentionally empty.
+            }
+        }
+
+        // Recreate idx_day_tasks_routine_item_date WITHOUT the partial WHERE clause.
+        // MIGRATION_12_13 created it as a partial index:
+        //   CREATE UNIQUE INDEX … WHERE routine_item_id IS NOT NULL
+        // Room.TableInfo.read() inconsistently reads partial indices across devices —
+        // on some it sees the index, on others it returns indices=[]. The result is
+        // either Expected=[] vs Found=[index] OR Expected=[index] vs Found=[] →
+        // "Migration didn't properly handle: day_tasks" crash on one or the other.
+        // Functional behavior is unchanged: SQLite UNIQUE indexes already treat NULL
+        // values as distinct, so the WHERE clause was effectively redundant.
+        private val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP INDEX IF EXISTS idx_day_tasks_routine_item_date")
+                db.execSQL(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_day_tasks_routine_item_date " +
+                        "ON day_tasks(routine_item_id, date)"
+                )
+            }
+        }
+
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
@@ -331,7 +363,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "agenticfocus.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
                     .build()
                     .also { INSTANCE = it }
             }

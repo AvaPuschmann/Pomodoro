@@ -77,7 +77,10 @@ dependencies {
     implementation(libs.supabase.gotrue)
     implementation(libs.supabase.realtime)
     implementation(libs.supabase.postgrest)
-    runtimeOnly(libs.ktor.client.android)
+    // OkHttp engine — supports WebSocket (required for Supabase Realtime).
+    // ktor-client-android does NOT support WebSocketCapability, causing
+    // "Engine doesn't support WebSocketCapability" error every 7s in logcat.
+    runtimeOnly(libs.ktor.client.okhttp)
 
     implementation(libs.androidx.core.splashscreen)
 

@@ -36,7 +36,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         LibraryState(domains = domains, templatesByDomain = byDomain)
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
+        // Eagerly: keep the state populated as long as the VM is alive.
+        // WhileSubscribed(5_000) caused the Library tab + EditTaskForm domain dropdown
+        // to flash empty when returning from another tab after 5s of inactivity:
+        // Flow stopped → re-subscribed → initialValue = LibraryState() (empty) emitted
+        // before Room re-collected. Eagerly avoids that window. Cost is negligible.
+        started = SharingStarted.Eagerly,
         initialValue = LibraryState()
     )
 

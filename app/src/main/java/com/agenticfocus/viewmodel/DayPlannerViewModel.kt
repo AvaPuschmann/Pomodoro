@@ -202,10 +202,24 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
         name: String,
         impact: String? = null,
         urgency: String? = null,
-        scheduledDate: LocalDate? = null
+        scheduledDate: LocalDate? = null,
+        note: String? = null,
+        plannedPomodoros: Int = 0,
+        storyPoints: Int = 0,
+        domainId: String? = null,
+        dueDate: Long? = null
     ) {
         if (name.isBlank()) return
-        val task = DayTask(name = name.trim(), impact = impact, urgency = urgency)
+        val task = DayTask(
+            name = name.trim(),
+            impact = impact,
+            urgency = urgency,
+            note = note?.takeIf { it.isNotBlank() },
+            plannedPomodoros = plannedPomodoros.coerceIn(0, MAX_POMODOROS_PER_TASK),
+            storyPoints = storyPoints.coerceAtLeast(0),
+            domainId = domainId,
+            dueDate = dueDate
+        )
         when {
             scheduledDate == null -> {
                 // No date = backlog
