@@ -26,12 +26,17 @@ import io.github.jan.supabase.realtime.realtime
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 object RealtimeSyncManager {
 
@@ -52,13 +57,26 @@ object RealtimeSyncManager {
     private var db: AppDatabase? = null
     private var syncScope: CoroutineScope? = null
     private var realtimeChannel: RealtimeChannel? = null
+    private var currentSyncUserId: String? = null
 
     fun initialize(db: AppDatabase) {
         this.db = db
     }
 
     fun startSync(userId: String) {
+        // Idempotent guard: AuthViewModel calls startSync from both restoreSession()
+        // and sessionStatusFlow.collect — they can fire within milliseconds of each
+        // other during app cold-start. Without this guard, the 2nd call's internal
+        // stopSync() cancels the 1st run's in-flight subscriptions+pullSync (Job was
+        // cancelled cascade), leaving the channel in an inconsistent state on the
+        // server (Realtime events stop arriving on mobile even though the websocket
+        // is connected). Skipping the duplicate call preserves the stable subscription.
+        if (currentSyncUserId == userId && syncScope?.isActive == true) {
+            Log.d(TAG, "startSync($userId) skipped — already running with same user")
+            return
+        }
         stopSync()
+        currentSyncUserId = userId
         val scope = CoroutineScope(Dispatchers.IO + SupervisorJob() + swallowRealtimeRaces)
         syncScope = scope
         scope.launch {
@@ -68,38 +86,45 @@ object RealtimeSyncManager {
 
                 subscribeToTable<DayTaskDto>(ch, "day_tasks", userId, scope,
                     onUpsert = { dto -> db?.dayTaskDao()?.upsert(dto.toEntity()) },
-                    onDelete = { dto -> db?.dayTaskDao()?.deleteById(dto.id) }
+                    onDeleteById = { id -> db?.dayTaskDao()?.deleteById(id) }
                 )
                 subscribeToTable<PomodoroSessionDto>(ch, "pomodoro_sessions", userId, scope,
                     onUpsert = { dto -> db?.pomodoroSessionDao()?.upsert(dto.toEntity()) },
-                    onDelete = { dto -> db?.pomodoroSessionDao()?.deleteById(dto.id) }
+                    onDeleteById = { id -> db?.pomodoroSessionDao()?.deleteById(id) }
                 )
                 subscribeToTable<DomainDto>(ch, "domains", userId, scope,
                     onUpsert = { dto -> db?.domainDao()?.insert(dto.toEntity()) },
-                    onDelete = { dto -> db?.domainDao()?.deleteById(dto.id) }
+                    onDeleteById = { id -> db?.domainDao()?.deleteById(id) }
                 )
                 subscribeToTable<TaskTemplateDto>(ch, "task_templates", userId, scope,
                     onUpsert = { dto -> db?.taskTemplateDao()?.insert(dto.toEntity()) },
-                    onDelete = { dto -> db?.taskTemplateDao()?.deleteById(dto.id) }
+                    onDeleteById = { id -> db?.taskTemplateDao()?.deleteById(id) }
                 )
                 subscribeToTable<SubtaskDto>(ch, "subtasks", userId, scope,
                     onUpsert = { dto -> db?.subtaskDao()?.upsert(dto.toEntity()) },
-                    onDelete = { dto -> db?.subtaskDao()?.deleteById(dto.id) }
+                    onDeleteById = { id -> db?.subtaskDao()?.deleteById(id) }
                 )
                 subscribeToTable<GoalDto>(ch, "goals", userId, scope,
                     onUpsert = { dto -> db?.goalDao()?.upsert(dto.toEntity()) },
-                    onDelete = { dto -> db?.goalDao()?.deleteById(dto.id) }
+                    onDeleteById = { id -> db?.goalDao()?.deleteById(id) }
                 )
                 // A1 — Realtime subscriptions for routines + routine_items
                 subscribeToTable<RoutineDto>(ch, "routines", userId, scope,
                     onUpsert = { dto -> db?.routineDao()?.upsertRoutine(dto.toEntity()) },
-                    onDelete = { dto -> db?.routineDao()?.deleteRoutine(dto.id) }
+                    onDeleteById = { id -> db?.routineDao()?.deleteRoutine(id) }
                 )
                 subscribeToTable<RoutineItemDto>(ch, "routine_items", userId, scope,
                     onUpsert = { dto -> db?.routineDao()?.upsertRoutineItem(dto.toEntity()) },
-                    onDelete = { dto -> db?.routineDao()?.deleteRoutineItem(dto.id) }
+                    onDeleteById = { id -> db?.routineDao()?.deleteRoutineItem(id) }
                 )
 
+                // Belt-and-suspenders: even though subscribeToTable now suspends until
+                // its onStart fires, the upstream callbackFlow producer (which calls
+                // addPostgresChange to register the filter on the channel) runs slightly
+                // after onStart due to Kotlin Flow operator ordering. A short delay gives
+                // the producer block time to finish registration before SUBSCRIBE is sent.
+                delay(300)
+                Log.d(TAG, "All ${8} Realtime subscriptions registered, calling channel.subscribe()")
                 ch.subscribe()
 
                 // A1 (F6) — One-shot startup cleanup of stale sync_queue entries for routines.
@@ -143,6 +168,7 @@ object RealtimeSyncManager {
         scope?.cancel()
         syncScope = null
         realtimeChannel = null
+        currentSyncUserId = null
         SyncStatusManager.resetFirstPullCompleted()
     }
 
@@ -346,29 +372,69 @@ object RealtimeSyncManager {
 
     // ── Per-table subscription helper ─────────────────────────────────────────
 
-    private inline fun <reified Dto> subscribeToTable(
+    /**
+     * Sets up a Realtime postgresChangeFlow listener and AWAITS its registration
+     * before returning. This is critical: supabase-kt requires all postgresChange
+     * listeners to be registered BEFORE channel.subscribe() is called (the docs
+     * say so, and registration after subscribe() throws). The previous version
+     * launched the collect inside scope.launch { }, which started async — so
+     * ch.subscribe() ran before listeners were registered → SUBSCRIBE message
+     * sent with no filters → mobile received no Realtime events from the server
+     * (especially desktop → mobile direction was broken).
+     *
+     * Uses .onSubscription { signal.complete() } to detect when the inner
+     * callbackFlow producer has started (i.e. addPostgresChange has been called),
+     * then suspends caller until that signal fires.
+     */
+    /**
+     * `onDelete` takes only the row ID (String) instead of the decoded DTO.
+     *
+     * Why: Supabase Realtime DELETE events only carry the row's primary key
+     * (REPLICA IDENTITY DEFAULT). Trying to decode the partial JSON into a DTO
+     * with required non-null fields (e.g. DayTaskDto.name, plannedPomodoros)
+     * throws SerializationException → caught silently → DELETE never applied.
+     * Extracting the ID directly from action.oldRecord["id"] avoids this and
+     * is sufficient since DAO deletes only need the ID.
+     *
+     * Setting `ALTER TABLE … REPLICA IDENTITY FULL` on Supabase would also
+     * fix it server-side, but this client-side fix is more robust.
+     */
+    private suspend inline fun <reified Dto> subscribeToTable(
         channel: RealtimeChannel,
         table: String,
         userId: String,
         scope: CoroutineScope,
         crossinline onUpsert: suspend (Dto) -> Unit,
-        crossinline onDelete: suspend (Dto) -> Unit
+        crossinline onDeleteById: suspend (String) -> Unit
     ) {
+        val ready = CompletableDeferred<Unit>()
         scope.launch {
             try {
                 channel.postgresChangeFlow<PostgresAction>("public") {
                     this.table = table
                     filter("user_id", FilterOperator.EQ, userId)
                 }
+                    .onStart { ready.complete(Unit) }
                     .catch { e ->
                         Log.w(TAG, "Realtime flow error on $table: ${e.message}")
                     }
                     .collect { action ->
                         try {
                             when (action) {
-                                is PostgresAction.Insert -> onUpsert(action.decodeRecord())
-                                is PostgresAction.Update -> onUpsert(action.decodeRecord())
-                                is PostgresAction.Delete -> onDelete(action.decodeOldRecord())
+                                is PostgresAction.Insert -> {
+                                    Log.d(TAG, "Realtime INSERT on $table")
+                                    onUpsert(action.decodeRecord())
+                                }
+                                is PostgresAction.Update -> {
+                                    Log.d(TAG, "Realtime UPDATE on $table")
+                                    onUpsert(action.decodeRecord())
+                                }
+                                is PostgresAction.Delete -> {
+                                    val id = action.oldRecord["id"]?.jsonPrimitive?.contentOrNull
+                                    Log.d(TAG, "Realtime DELETE on $table id=$id")
+                                    if (id != null) onDeleteById(id)
+                                    else Log.w(TAG, "DELETE on $table missing id in oldRecord: ${action.oldRecord}")
+                                }
                                 else -> {}
                             }
                         } catch (e: Exception) {
@@ -377,7 +443,10 @@ object RealtimeSyncManager {
                     }
             } catch (e: Exception) {
                 Log.w(TAG, "Subscription to $table errored: ${e.message}")
+                // Unblock caller even on errors so startSync doesn't hang forever.
+                ready.complete(Unit)
             }
         }
+        ready.await()
     }
 }
