@@ -19,6 +19,7 @@ import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.GoalEntity
 import com.agenticfocus.data.entity.PomodoroSessionEntity
+import com.agenticfocus.data.entity.ProjectEntity
 import com.agenticfocus.data.entity.RoutineEntity
 import com.agenticfocus.data.entity.RoutineItemEntity
 import com.agenticfocus.data.entity.SubtaskEntity
@@ -35,9 +36,10 @@ import com.agenticfocus.data.entity.TaskTemplateEntity
         SubtaskEntity::class,
         GoalEntity::class,
         RoutineEntity::class,
-        RoutineItemEntity::class
+        RoutineItemEntity::class,
+        ProjectEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -259,6 +261,37 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Mode Projet — Story 16-4 / Sprint 16.
+        // Creates projects table (mirror Supabase + SQLite desktop V13) and adds
+        // day_tasks.project_id with matching Index [D26/F5].
+        // CHECK constraint on kanban_status is NOT declared here (Room can't validate
+        // CHECK constraints in @Entity) — runtime validation done in KanbanStatus
+        // sealed object (Story 17-1).
+        // No FK locally (cohérent autres tables ; cascade SET NULL = server-side
+        // via Postgres FK ON DELETE SET NULL — Story 16-2 / D46).
+        private val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS projects (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        user_id TEXT NOT NULL DEFAULT '',
+                        name TEXT NOT NULL DEFAULT '',
+                        description TEXT,
+                        kanban_status TEXT NOT NULL DEFAULT 'backlog',
+                        kanban_position REAL NOT NULL DEFAULT 0,
+                        target_date INTEGER,
+                        domain_id TEXT,
+                        is_archived INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_projects_user_id ON projects(user_id)")
+                db.execSQL("ALTER TABLE day_tasks ADD COLUMN project_id TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_day_tasks_project_id ON day_tasks(project_id)")
+            }
+        }
+
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
@@ -363,7 +396,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "agenticfocus.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
                     .build()
                     .also { INSTANCE = it }
             }

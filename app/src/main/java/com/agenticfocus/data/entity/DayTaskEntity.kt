@@ -8,7 +8,9 @@ import androidx.room.PrimaryKey
 // NOTE: @ColumnInfo(defaultValue=…) and indices declarations must mirror what the
 // migrations actually created in SQL — otherwise Room's runtime schema validation
 // crashes the app at startup with "Migration didn't properly handle: day_tasks".
-// Defaults from MIGRATION_2_3 / 6_7 / 7_8 / 9_10 / 11_12 / 12_13. Index from MIGRATION_12_13.
+// Defaults from MIGRATION_2_3 / 6_7 / 7_8 / 9_10 / 11_12 / 12_13.
+// Indices: idx_day_tasks_routine_item_date from MIGRATION_12_13/14_15 ;
+//          index_day_tasks_project_id from MIGRATION_15_16 (Story 16-4 / D26 / F5).
 @Entity(
     tableName = "day_tasks",
     indices = [
@@ -16,6 +18,10 @@ import androidx.room.PrimaryKey
             value = ["routine_item_id", "date"],
             unique = true,
             name = "idx_day_tasks_routine_item_date"
+        ),
+        Index(
+            value = ["project_id"],
+            name = "index_day_tasks_project_id"
         )
     ]
 )
@@ -38,5 +44,6 @@ data class DayTaskEntity(
     val note: String? = null,
     @ColumnInfo(name = "is_completed", defaultValue = "0") val isCompleted: Boolean = false,
     @ColumnInfo(name = "source", defaultValue = "NULL") val source: String? = null,
-    @ColumnInfo(name = "routine_item_id", defaultValue = "NULL") val routineItemId: String? = null
+    @ColumnInfo(name = "routine_item_id", defaultValue = "NULL") val routineItemId: String? = null,
+    @ColumnInfo(name = "project_id") val projectId: String? = null
 )
