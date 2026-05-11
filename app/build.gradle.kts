@@ -28,6 +28,10 @@ android {
 
         buildConfigField("String", "SUPABASE_URL", "\"${localProps["SUPABASE_URL"] ?: ""}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProps["SUPABASE_ANON_KEY"] ?: ""}\"")
+
+        // Mode Projet feature flags (Story 16-1) — defaults true, override via local.properties
+        buildConfigField("Boolean", "FEATURE_PROJECTS", localProps["FEATURE_PROJECTS"]?.toString() ?: "true")
+        buildConfigField("Boolean", "FEATURE_KANBAN_UI", localProps["FEATURE_KANBAN_UI"]?.toString() ?: "true")
     }
 
     buildTypes {
