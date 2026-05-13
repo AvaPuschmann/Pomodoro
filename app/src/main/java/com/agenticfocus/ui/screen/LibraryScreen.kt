@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -95,6 +96,7 @@ private val domainColorPalette = listOf(
 fun LibraryScreen(
     viewModel: LibraryViewModel,
     routineViewModel: RoutineViewModel,
+    onOpenSettings: () -> Unit = {},  // Story 18-1 — Settings via ⚙ topbar
     contentPadding: PaddingValues = PaddingValues()
 ) {
     // D3 — F2: nav swap au ROOT du composable, AVANT le rendu Library, pour éviter
@@ -172,7 +174,7 @@ fun LibraryScreen(
                 .fillMaxSize()
                 .padding(bottom = contentPadding.calculateBottomPadding())
         ) {
-            // Header
+            // Header (Story 18-1 — ⚙ Settings IconButton ajouté à droite)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -181,11 +183,20 @@ fun LibraryScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Ma Bibliothèque", color = TextWhite, fontSize = 18.sp)
-                Text(
-                    "${state.templatesByDomain.values.sumOf { it.size }} tâches",
-                    color = SubtleWhite,
-                    fontSize = 14.sp
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "${state.templatesByDomain.values.sumOf { it.size }} tâches",
+                        color = SubtleWhite,
+                        fontSize = 14.sp
+                    )
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "Paramètres",
+                            tint = TextWhite
+                        )
+                    }
+                }
             }
 
             // D2 — Search bar (full-text filter on template titles)

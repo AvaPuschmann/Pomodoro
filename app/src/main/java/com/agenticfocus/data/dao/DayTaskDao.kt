@@ -31,6 +31,14 @@ interface DayTaskDao {
     @Query("UPDATE day_tasks SET date = :date WHERE id = :id")
     suspend fun scheduleTask(id: String, date: String)
 
+    // Story 18-4 — unschedule (date = NULL → tâche revient au backlog).
+    @Query("UPDATE day_tasks SET date = NULL WHERE id = :id")
+    suspend fun unscheduleTask(id: String)
+
+    // Story 18-4 — observe day_tasks rattachées à un projet (pour ProjectDetailScreen).
+    @Query("SELECT * FROM day_tasks WHERE project_id = :projectId ORDER BY position ASC, created_at ASC")
+    fun observeTasksForProject(projectId: String): Flow<List<DayTaskEntity>>
+
     @Query("DELETE FROM day_tasks WHERE id = :id")
     suspend fun deleteById(id: String)
 

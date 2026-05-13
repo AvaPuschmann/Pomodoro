@@ -77,7 +77,8 @@ private fun DayTaskEntity.toDayTask() = DayTask(
     dueDate = dueDate,
     note = note,
     isCompleted = isCompleted,
-    routineItemId = routineItemId
+    routineItemId = routineItemId,
+    projectId = projectId
 )
 
 private fun DayTask.toEntity(date: String?, position: Int) = DayTaskEntity(
@@ -95,5 +96,6 @@ private fun DayTask.toEntity(date: String?, position: Int) = DayTaskEntity(
     dueDate = dueDate,
     note = note,
     isCompleted = isCompleted,
-    routineItemId = null
+    routineItemId = null,
+    projectId = projectId  // Story 18-7 — persist project_id at creation
 )

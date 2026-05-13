@@ -159,6 +159,40 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         viewModelScope.launch { runCatching { repository.setProjectIdOnTask(taskId, projectId) } }
     }
 
+    // ── Tasks observation for ProjectDetailScreen — Story 18-4 ─────
+    fun observeTasksForProject(projectId: String): kotlinx.coroutines.flow.Flow<List<com.agenticfocus.data.entity.DayTaskEntity>> =
+        db.dayTaskDao().observeTasksForProject(projectId)
+
+    /**
+     * Toggle bidirectionnel [D31] :
+     *  - date == null (backlog) → set today
+     *  - date == today          → set null (retour backlog)
+     *  - sinon (passé/futur)    → set today
+     * Push sync via SyncEngine.upsertDayTask post-update.
+     */
+    fun planTaskForToday(taskId: String) {
+        viewModelScope.launch {
+            runCatching {
+                val task = db.dayTaskDao().getById(taskId) ?: return@launch
+                val today = todayDateString()
+                val dao = db.dayTaskDao()
+                if (task.date == today) {
+                    dao.unscheduleTask(taskId)
+                } else {
+                    dao.scheduleTask(taskId, today)
+                }
+                dao.getById(taskId)?.let {
+                    try { com.agenticfocus.data.sync.SyncEngine.upsertDayTask(it) } catch (_: Exception) {}
+                }
+            }
+        }
+    }
+
+    private fun todayDateString(): String {
+        val now = java.time.LocalDate.now()
+        return "%04d-%02d-%02d".format(now.year, now.monthValue, now.dayOfMonth)
+    }
+
     // ── Filters / sort / preferences ───────────────────────────────
     fun setSortOrder(order: SortOrder) {
         _state.update { it.copy(sortOrder = order) }

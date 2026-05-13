@@ -8,9 +8,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -37,6 +41,7 @@ import com.agenticfocus.ui.theme.TomatoRed
 fun SettingsScreen(
     onSignOut: () -> Unit,
     onManualSync: () -> Unit,
+    onClose: (() -> Unit)? = null,  // Story 18-1 — null = back-compat (pas d'overlay)
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -57,13 +62,35 @@ fun SettingsScreen(
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text(
-            text = "Réglages",
-            color = TextWhite,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
+        // Story 18-1 — Header with optional back button (overlay mode)
+        if (onClose != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onClose) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Retour",
+                        tint = TextWhite
+                    )
+                }
+                Text(
+                    text = "Réglages",
+                    color = TextWhite,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        } else {
+            Text(
+                text = "Réglages",
+                color = TextWhite,
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
 
         // ── Section: Timer ───────────────────────────────────────────────────────
         SectionHeader("Timer")

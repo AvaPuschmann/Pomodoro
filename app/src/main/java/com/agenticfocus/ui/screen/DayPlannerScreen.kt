@@ -110,6 +110,7 @@ private val frenchDateFormatter = DateTimeFormatter.ofPattern("EEE d MMM", Local
 fun DayPlannerScreen(
     viewModel: DayPlannerViewModel,
     libraryViewModel: LibraryViewModel,
+    projectViewModel: com.agenticfocus.viewmodel.ProjectViewModel? = null,  // Story 18-6 — null = FEATURE_PROJECTS off
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -171,7 +172,12 @@ fun DayPlannerScreen(
     val focusManager = LocalFocusManager.current
 
     val totalPlanned = state.tasks.sumOf { it.plannedPomodoros }
+    val totalCompleted = state.tasks.sumOf { it.completedPomodoros }
     val isOverCapacity = totalPlanned > DayPlannerViewModel.DAILY_CAPACITY
+    val totalStoryPointsPlanned = state.tasks.sumOf { it.storyPoints }
+    val totalStoryPointsCompleted = state.tasks
+        .filter { it.isCompleted || (it.plannedPomodoros > 0 && it.completedPomodoros >= it.plannedPomodoros) }
+        .sumOf { it.storyPoints }
 
     val eodTime by remember { derivedStateOf { computeEndOfDay(state.tasks) } }
 
@@ -214,7 +220,12 @@ fun DayPlannerScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "$totalPlanned / ${DayPlannerViewModel.DAILY_CAPACITY} 🍅",
+                    text = buildString {
+                        append("$totalCompleted / $totalPlanned 🍅")
+                        if (totalStoryPointsPlanned > 0) {
+                            append(" • $totalStoryPointsCompleted / $totalStoryPointsPlanned 💎")
+                        }
+                    },
                     color = if (isOverCapacity) TomatoRed else SubtleWhite,
                     fontSize = 14.sp
                 )
@@ -494,6 +505,8 @@ fun DayPlannerScreen(
                 task = task,
                 currentDate = selectedDate,
                 domains = libraryState.domains,
+                projects = projectViewModel?.state?.collectAsStateWithLifecycle()?.value?.projects ?: emptyList(),
+                onProjectChanged = { newProjectId -> projectViewModel?.setProjectIdOnTask(task.id, newProjectId) },
                 loadSubtasks = { taskId -> viewModel.getSubtasksForTask(taskId) },
                 onSave = { name, note, impact, urgency, scheduledDate, plannedPomodoros, storyPoints, domainId, dueDate, subtasks, originalIds ->
                     viewModel.updateTaskDetails(
@@ -631,10 +644,12 @@ private fun formatRelativeTime(timestampMs: Long): String {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddTaskForm(
+internal fun AddTaskForm(
     initialName: String,
     initialDate: LocalDate,
     domains: List<DomainEntity> = emptyList(),
+    // Story 18-7 — pre-fill depuis ProjectDetailScreen. null = workflow Day Planner classique.
+    prefilledProjectName: String? = null,
     onAdd: (
         name: String,
         impact: String?,
@@ -679,6 +694,21 @@ private fun AddTaskForm(
             fontWeight = FontWeight.SemiBold,
             fontSize = 16.sp
         )
+
+        // Story 18-7 — Chip non-interactif indiquant le projet pré-rempli depuis ProjectDetailScreen
+        if (prefilledProjectName != null) {
+            Surface(
+                color = Color(0xFFE53935).copy(alpha = 0.15f),
+                shape = RoundedCornerShape(12.dp),
+            ) {
+                Text(
+                    text = "📁 Projet : $prefilledProjectName",
+                    color = TomatoRed,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
 
         // Name field
         OutlinedTextField(
@@ -980,12 +1010,15 @@ private fun AddTaskForm(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun EditTaskForm(
     task: com.agenticfocus.viewmodel.DayTask,
     currentDate: LocalDate,
     domains: List<DomainEntity> = emptyList(),
+    // Story 18-6 — selector "Lier à un projet" (gated FEATURE_PROJECTS via projects.isNotEmpty())
+    projects: List<com.agenticfocus.data.entity.ProjectEntity> = emptyList(),
+    onProjectChanged: (String?) -> Unit = {},
     loadSubtasks: suspend (String) -> List<SubtaskEntity>,
     onSave: (
         name: String,
@@ -1234,6 +1267,33 @@ private fun EditTaskForm(
                 )
                 if (scheduledDate != null) {
                     TextButton(onClick = { scheduledDate = null }) { Text("×", color = SubtleWhite, fontSize = 16.sp) }
+                }
+            }
+        }
+
+        // Mode Projet — Story 18-6. Selector "Lier à un projet" (visible uniquement
+        // si projects non vide → gated FEATURE_PROJECTS via list filtering côté caller).
+        if (projects.isNotEmpty()) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Lier à un projet", color = SubtleWhite, fontSize = 13.sp)
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ToggleChip(
+                        label = "Aucun",
+                        selected = task.projectId == null,
+                        selectedColor = Color(0xFF6C6C70),
+                        onClick = { onProjectChanged(null) }
+                    )
+                    projects.filter { !it.isArchived }.forEach { p ->
+                        ToggleChip(
+                            label = p.name,
+                            selected = task.projectId == p.id,
+                            selectedColor = Color(0xFFE53935),
+                            onClick = { onProjectChanged(p.id) }
+                        )
+                    }
                 }
             }
         }

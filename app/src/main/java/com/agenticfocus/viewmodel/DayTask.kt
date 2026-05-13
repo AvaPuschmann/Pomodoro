@@ -15,7 +15,8 @@ data class DayTask(
     val dueDate: Long? = null,        // Unix ms, null = no deadline
     val note: String? = null,
     val isCompleted: Boolean = false,
-    val routineItemId: String? = null
+    val routineItemId: String? = null,
+    val projectId: String? = null  // Mode Projet — Story 18-6 / Sprint 18
 )
 
 data class DayPlannerState(

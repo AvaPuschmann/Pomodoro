@@ -207,7 +207,8 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
         plannedPomodoros: Int = 0,
         storyPoints: Int = 0,
         domainId: String? = null,
-        dueDate: Long? = null
+        dueDate: Long? = null,
+        projectId: String? = null  // Story 18-7 — pre-fill depuis ProjectDetailScreen
     ) {
         if (name.isBlank()) return
         val task = DayTask(
@@ -218,7 +219,8 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
             plannedPomodoros = plannedPomodoros.coerceIn(0, MAX_POMODOROS_PER_TASK),
             storyPoints = storyPoints.coerceAtLeast(0),
             domainId = domainId,
-            dueDate = dueDate
+            dueDate = dueDate,
+            projectId = projectId
         )
         when {
             scheduledDate == null -> {

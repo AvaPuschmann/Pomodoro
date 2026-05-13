@@ -18,6 +18,17 @@ import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ViewKanban
+import com.agenticfocus.ui.screen.AddTaskForm
+import com.agenticfocus.ui.screen.ProjectDetailScreen
+import com.agenticfocus.ui.screen.ProjectFormSheet
+import com.agenticfocus.ui.screen.ProjectsKanbanScreen
+import com.agenticfocus.data.entity.ProjectEntity
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.graphics.Color
+import java.time.LocalDate
 
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -52,11 +63,15 @@ import com.agenticfocus.ui.screen.PomodoroScreen
 import com.agenticfocus.ui.screen.SettingsScreen
 import com.agenticfocus.ui.screen.StatsScreen
 import com.agenticfocus.ui.theme.AgenticFocusTheme
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.agenticfocus.BuildConfig
 import com.agenticfocus.viewmodel.AuthState
 import com.agenticfocus.viewmodel.AuthViewModel
 import com.agenticfocus.viewmodel.AuthViewModelFactory
 import com.agenticfocus.viewmodel.DayPlannerViewModel
 import com.agenticfocus.viewmodel.LibraryViewModel
+import com.agenticfocus.viewmodel.ProjectViewModel
 import com.agenticfocus.viewmodel.RoutineViewModel
 import com.agenticfocus.viewmodel.StatsViewModel
 import com.agenticfocus.data.db.AppDatabase
@@ -69,9 +84,11 @@ import kotlinx.coroutines.launch
 private enum class Tab(val label: String, val icon: ImageVector) {
     TIMER("Timer", Icons.Filled.PlayArrow),
     PLANNER("Planner", Icons.Default.List),
+    // Mode Projet — Story 18-1 / Sprint 18. Gated FEATURE_PROJECTS (16-1).
+    PROJECTS("Projets", Icons.Default.ViewKanban),
     LIBRARY("Biblio", Icons.Default.MenuBook),
-    STATS("Stats", Icons.Default.BarChart),
-    SETTINGS("Réglages", Icons.Default.Settings)
+    STATS("Stats", Icons.Default.BarChart)
+    // SETTINGS retiré du bottom nav Sprint 18 — déplacé en topbar Library via ⚙ IconButton.
 }
 
 class MainActivity : ComponentActivity() {
@@ -89,6 +106,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch { repo.injectRoutinesForToday(userId) }
     }
 
+    @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         // installSplashScreen must be called before super.onCreate.
         // The splash stays visible until isAuthChecked=true (after restoreSession completes),
@@ -174,11 +192,28 @@ class MainActivity : ComponentActivity() {
                             val libraryVM: LibraryViewModel = viewModel()
                             val routineVM: RoutineViewModel = viewModel()
                             val statsVM: StatsViewModel = viewModel()
+                            // Mode Projet — Story 18-1. Instancié uniquement si FEATURE_PROJECTS=true
+                            // (évite charger sync inutilement).
+                            val projectVM: ProjectViewModel? =
+                                if (BuildConfig.FEATURE_PROJECTS) viewModel() else null
                             var selectedTab by remember { mutableStateOf(Tab.TIMER) }
+                            // Story 18-1 — Settings accessible via overlay déclenché depuis Library topbar.
+                            var showSettings by rememberSaveable { mutableStateOf(false) }
+                            // Story 18-5 — state pour ProjectFormSheet (création ou édition).
+                            var projectFormVisible by remember { mutableStateOf(false) }
+                            var projectFormEditing by remember { mutableStateOf<ProjectEntity?>(null) }
+                            // Story 18-4 — state pour ProjectDetailScreen (id = visible si non null)
+                            var openedProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+                            // Story 18-7 — state pour AddTaskForm pre-fill depuis ProjectDetailScreen
+                            var addTaskForProjectId by remember { mutableStateOf<String?>(null) }
 
                             // D3 — Wire RoutineViewModel to current user (gates auto-create on firstPullCompleted)
                             LaunchedEffect(userId) {
                                 routineVM.setUserId(userId)
+                            }
+                            // Story 18-1 — Wire ProjectViewModel au user courant (gated)
+                            LaunchedEffect(userId) {
+                                projectVM?.setUserId(userId)
                             }
 
                             val snackbarHostState = remember { SnackbarHostState() }
@@ -201,38 +236,156 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
+                            // Story 18-1 — liste tabs dynamique gated FEATURE_PROJECTS.
+                            // SETTINGS retiré du bottom nav, accessible via topbar Library.
+                            val visibleTabs = remember {
+                                buildList {
+                                    add(Tab.TIMER)
+                                    add(Tab.PLANNER)
+                                    if (BuildConfig.FEATURE_PROJECTS) add(Tab.PROJECTS)
+                                    add(Tab.LIBRARY)
+                                    add(Tab.STATS)
+                                }
+                            }
+
                             Scaffold(
                                 snackbarHost = { SnackbarHost(snackbarHostState) },
                                 bottomBar = {
-                                    NavigationBar {
-                                        Tab.entries.forEach { tab ->
-                                            NavigationBarItem(
-                                                selected = selectedTab == tab,
-                                                onClick = { selectedTab = tab },
-                                                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                                label = { Text(tab.label) }
-                                            )
+                                    // Cache le bottom nav si l'overlay Settings est actif (UX cohérence)
+                                    if (!showSettings) {
+                                        NavigationBar {
+                                            visibleTabs.forEach { tab ->
+                                                NavigationBarItem(
+                                                    selected = selectedTab == tab,
+                                                    onClick = { selectedTab = tab },
+                                                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                                                    label = { Text(tab.label) }
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             ) { innerPadding ->
-                                when (selectedTab) {
-                                    Tab.TIMER    -> PomodoroScreen(
-                                        dayPlannerViewModel = dayPlannerVM,
-                                        contentPadding = innerPadding
-                                    )
-                                    Tab.PLANNER  -> DayPlannerScreen(dayPlannerVM, libraryVM, contentPadding = innerPadding)
-                                    Tab.LIBRARY  -> LibraryScreen(libraryVM, routineVM, contentPadding = innerPadding)
-                                    Tab.STATS    -> StatsScreen(statsVM, contentPadding = innerPadding)
-                                    Tab.SETTINGS -> SettingsScreen(
+                                if (showSettings) {
+                                    // Story 18-1 — Settings overlay full-screen avec callback close
+                                    SettingsScreen(
                                         onSignOut = { authVM.signOut() },
                                         onManualSync = {
                                             this@MainActivity.authenticatedUserId?.let { uid ->
                                                 RealtimeSyncManager.triggerPull(uid)
                                             }
                                         },
+                                        onClose = { showSettings = false },
                                         contentPadding = innerPadding
                                     )
+                                } else {
+                                    when (selectedTab) {
+                                        Tab.TIMER    -> PomodoroScreen(
+                                            dayPlannerViewModel = dayPlannerVM,
+                                            contentPadding = innerPadding
+                                        )
+                                        Tab.PLANNER  -> DayPlannerScreen(
+                                            viewModel = dayPlannerVM,
+                                            libraryViewModel = libraryVM,
+                                            projectViewModel = projectVM,
+                                            contentPadding = innerPadding
+                                        )
+                                        Tab.PROJECTS -> {
+                                            // Story 18-2 — ProjectsKanbanScreen wired
+                                            // onCreateProject / onEditProject / onOpenProject sont stub V1
+                                            // jusqu'à ce que 18-5 (FormSheet) et 18-4 (DetailScreen) soient implémentés.
+                                            if (projectVM != null) {
+                                                val openedId = openedProjectId
+                                                if (openedId != null) {
+                                                    // Story 18-4 — ProjectDetailScreen overlay
+                                                    ProjectDetailScreen(
+                                                        projectId = openedId,
+                                                        projectVM = projectVM,
+                                                        libraryVM = libraryVM,
+                                                        onClose = { openedProjectId = null },
+                                                        onEditProject = {
+                                                            val p = projectVM.state.value.projects.find { it.id == openedId }
+                                                            if (p != null) {
+                                                                projectFormEditing = p
+                                                                projectFormVisible = true
+                                                            }
+                                                        },
+                                                        onAddTask = { projectId -> addTaskForProjectId = projectId },
+                                                        contentPadding = innerPadding
+                                                    )
+                                                } else {
+                                                    ProjectsKanbanScreen(
+                                                        projectVM = projectVM,
+                                                        libraryVM = libraryVM,
+                                                        onOpenProject = { id -> openedProjectId = id },
+                                                        onCreateProject = {
+                                                            projectFormEditing = null
+                                                            projectFormVisible = true
+                                                        },
+                                                        onEditProject = { p ->
+                                                            projectFormEditing = p
+                                                            projectFormVisible = true
+                                                        },
+                                                        contentPadding = innerPadding
+                                                    )
+                                                }
+                                                // Story 18-5 — ProjectFormSheet overlay (création ou édition)
+                                                if (projectFormVisible) {
+                                                    ProjectFormSheet(
+                                                        project = projectFormEditing,
+                                                        projectVM = projectVM,
+                                                        libraryVM = libraryVM,
+                                                        onDismiss = {
+                                                            projectFormVisible = false
+                                                            projectFormEditing = null
+                                                        }
+                                                    )
+                                                }
+                                                // Story 18-7 — AddTaskForm overlay avec project_id pré-rempli
+                                                val pendingProjectId = addTaskForProjectId
+                                                if (pendingProjectId != null) {
+                                                    val pendingProject = projectVM.state.value.projects.find { it.id == pendingProjectId }
+                                                    val addSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                                                    val libState = libraryVM.state.collectAsStateWithLifecycle().value
+                                                    ModalBottomSheet(
+                                                        sheetState = addSheetState,
+                                                        onDismissRequest = { addTaskForProjectId = null },
+                                                        containerColor = Color(0xFF1A1A1A)
+                                                    ) {
+                                                        AddTaskForm(
+                                                            initialName = "",
+                                                            initialDate = LocalDate.now(),
+                                                            domains = libState.domains,
+                                                            prefilledProjectName = pendingProject?.name,
+                                                            onAdd = { name, impact, urgency, scheduledDate, note, plannedPomodoros, storyPoints, domainId, dueDate ->
+                                                                dayPlannerVM.addTask(
+                                                                    name = name,
+                                                                    impact = impact,
+                                                                    urgency = urgency,
+                                                                    scheduledDate = scheduledDate,
+                                                                    note = note,
+                                                                    plannedPomodoros = plannedPomodoros,
+                                                                    storyPoints = storyPoints,
+                                                                    domainId = domainId,
+                                                                    dueDate = dueDate,
+                                                                    projectId = pendingProjectId
+                                                                )
+                                                                addTaskForProjectId = null
+                                                            },
+                                                            onDismiss = { addTaskForProjectId = null }
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Tab.LIBRARY  -> LibraryScreen(
+                                            libraryVM,
+                                            routineVM,
+                                            onOpenSettings = { showSettings = true },
+                                            contentPadding = innerPadding
+                                        )
+                                        Tab.STATS    -> StatsScreen(statsVM, contentPadding = innerPadding)
+                                    }
                                 }
                             }
                         }
