@@ -2,12 +2,14 @@ package com.agenticfocus.data.sync
 
 import android.util.Log
 import androidx.room.withTransaction
+import com.agenticfocus.BuildConfig
 import com.agenticfocus.data.db.AppDatabase
 import com.agenticfocus.data.supabase.SupabaseClientProvider
 import com.agenticfocus.data.supabase.dto.DayTaskDto
 import com.agenticfocus.data.supabase.dto.DomainDto
 import com.agenticfocus.data.supabase.dto.GoalDto
 import com.agenticfocus.data.supabase.dto.PomodoroSessionDto
+import com.agenticfocus.data.supabase.dto.ProjectDto
 import com.agenticfocus.data.supabase.dto.RoutineDto
 import com.agenticfocus.data.supabase.dto.RoutineItemDto
 import com.agenticfocus.data.supabase.dto.SubtaskDto
@@ -117,6 +119,14 @@ object RealtimeSyncManager {
                     onUpsert = { dto -> db?.routineDao()?.upsertRoutineItem(dto.toEntity()) },
                     onDeleteById = { id -> db?.routineDao()?.deleteRoutineItem(id) }
                 )
+                // Mode Projet — Story 17-9. Gated FEATURE_PROJECTS (16-1).
+                // Listener registered BEFORE channel.subscribe() per supabase-kt pitfall #4.
+                if (BuildConfig.FEATURE_PROJECTS) {
+                    subscribeToTable<ProjectDto>(ch, "projects", userId, scope,
+                        onUpsert = { dto -> db?.projectDao()?.upsert(dto.toEntity()) },
+                        onDeleteById = { id -> db?.projectDao()?.deleteById(id) }
+                    )
+                }
 
                 // Belt-and-suspenders: even though subscribeToTable now suspends until
                 // its onStart fires, the upstream callbackFlow producer (which calls
@@ -124,7 +134,8 @@ object RealtimeSyncManager {
                 // after onStart due to Kotlin Flow operator ordering. A short delay gives
                 // the producer block time to finish registration before SUBSCRIBE is sent.
                 delay(300)
-                Log.d(TAG, "All ${8} Realtime subscriptions registered, calling channel.subscribe()")
+                val subCount = if (BuildConfig.FEATURE_PROJECTS) 9 else 8
+                Log.d(TAG, "All $subCount Realtime subscriptions registered, calling channel.subscribe()")
                 ch.subscribe()
 
                 // A1 (F6) — One-shot startup cleanup of stale sync_queue entries for routines.
@@ -278,6 +289,19 @@ object RealtimeSyncManager {
             val routineItems = fetchAllUserRows<RoutineItemDto>("routine_items", userId)
             routineItems.forEach { db.routineDao().upsertRoutineItem(it.toEntity()) }
             Log.d(TAG, "Pulled ${routineItems.size} routine_items in ${System.currentTimeMillis() - tRoutineItems}ms")
+
+            // ── Projects: clear-then-replace (referential integrity with day_tasks.project_id)
+            // Story 17-9 / Sprint 17. Must be pulled BEFORE day_tasks so no transient
+            // orphan project_id in UI [D28/F7/F-B]. Gated FEATURE_PROJECTS (16-1).
+            if (BuildConfig.FEATURE_PROJECTS) {
+                val tProjects = System.currentTimeMillis()
+                val projects = fetchAllUserRows<ProjectDto>("projects", userId)
+                db.withTransaction {
+                    db.projectDao().deleteAll()
+                    projects.forEach { db.projectDao().upsert(it.toEntity()) }
+                }
+                Log.d(TAG, "Pulled ${projects.size} projects in ${System.currentTimeMillis() - tProjects}ms")
+            }
 
             // ── Day tasks: reconciliation (atomic, sync_queue protected, F1+F2+F3) ─
             val tTasks = System.currentTimeMillis()

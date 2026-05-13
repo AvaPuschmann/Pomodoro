@@ -1,0 +1,187 @@
+package com.agenticfocus.viewmodel
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.agenticfocus.data.AppPreferences
+import com.agenticfocus.data.db.AppDatabase
+import com.agenticfocus.data.entity.ProjectEntity
+import com.agenticfocus.data.repository.ProjectRepository
+import com.agenticfocus.data.repository.ProjectStats
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+data class ProjectUiState(
+    val projects: List<ProjectEntity> = emptyList(),
+    val statsByProject: Map<String, ProjectStats> = emptyMap(),
+    val wipLimitDoing: Int = 3,
+    val sortOrder: SortOrder = SortOrder.UPDATED_DESC,
+    val showArchived: Boolean = false,
+    val isLoading: Boolean = false,
+)
+
+enum class SortOrder { UPDATED_DESC, CREATED_DESC, NAME_ASC, TARGET_DATE_ASC }
+
+@OptIn(FlowPreview::class)
+class ProjectViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val db = AppDatabase.getInstance(application)
+    private val repository = ProjectRepository(
+        db = db,
+        projectDao = db.projectDao(),
+        dayTaskDao = db.dayTaskDao(),
+    )
+    private val prefs = AppPreferences(application)
+
+    private val _state = MutableStateFlow(
+        ProjectUiState(wipLimitDoing = prefs.wipLimitDoing)
+    )
+    val state: StateFlow<ProjectUiState> = _state.asStateFlow()
+
+    private var currentUserId: String? = null
+    private var observeJob: Job? = null
+
+    // Debounce moveKanbanStatus [F-L/F-3E/D42] : drag-drop rapide en cascade
+    // (Backlog → Todo → Doing → Done en 200ms) ne fait qu'un seul push Supabase.
+    private data class MoveCommand(
+        val id: String,
+        val newStatus: String,
+        val beforeId: String?,
+        val afterId: String?,
+    )
+    private val moveStatusFlow = MutableSharedFlow<MoveCommand>(extraBufferCapacity = 16)
+
+    init {
+        viewModelScope.launch {
+            moveStatusFlow
+                .debounce(300)
+                .collect { cmd ->
+                    try {
+                        repository.moveKanbanStatus(cmd.id, cmd.newStatus, cmd.beforeId, cmd.afterId)
+                    } catch (_: Exception) { /* validation invalide silencieusement */ }
+                }
+        }
+    }
+
+    fun setUserId(userId: String) {
+        if (currentUserId == userId) return  // idempotent — évite double-collect au re-login
+        currentUserId = userId
+        startObserving(userId)
+    }
+
+    private fun startObserving(userId: String) {
+        observeJob?.cancel()
+        observeJob = combine(
+            repository.observeAll(userId),
+            repository.observeStats(userId),
+        ) { projects, stats -> projects to stats }
+            .onEach { (projects, stats) ->
+                val currentState = _state.value
+                val filtered = if (currentState.showArchived) projects else projects.filter { !it.isArchived }
+                val sorted = applySortOrder(filtered, currentState.sortOrder)
+                _state.update {
+                    it.copy(projects = sorted, statsByProject = stats)
+                }
+            }
+            .launchIn(viewModelScope)
+    }
+
+    private fun applySortOrder(list: List<ProjectEntity>, order: SortOrder): List<ProjectEntity> =
+        when (order) {
+            SortOrder.UPDATED_DESC -> list.sortedByDescending { it.updatedAt }
+            SortOrder.CREATED_DESC -> list.sortedByDescending { it.createdAt }
+            SortOrder.NAME_ASC -> list.sortedBy { it.name.lowercase() }
+            SortOrder.TARGET_DATE_ASC -> list.sortedWith(
+                compareBy(nullsLast()) { it.targetDate }
+            )
+        }
+
+    // ── UI intents — Repository writes ─────────────────────────────
+    fun addProject(
+        name: String,
+        description: String? = null,
+        kanbanStatus: String = com.agenticfocus.data.entity.KanbanStatus.BACKLOG,
+        domainId: String? = null,
+        targetDate: Long? = null,
+    ) {
+        val userId = currentUserId ?: return
+        viewModelScope.launch {
+            try {
+                repository.addProject(userId, name, description, kanbanStatus, domainId, targetDate)
+            } catch (_: Exception) { /* validation invalide silencieusement */ }
+        }
+    }
+
+    fun updateProject(
+        id: String,
+        name: String? = null,
+        description: String? = null,
+        kanbanStatus: String? = null,
+        domainId: String? = null,
+        targetDate: Long? = null,
+    ) {
+        viewModelScope.launch {
+            try {
+                repository.updateProject(id, name, description, kanbanStatus, domainId, targetDate)
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun archiveProject(id: String) {
+        viewModelScope.launch { runCatching { repository.archiveProject(id) } }
+    }
+
+    fun unarchiveProject(id: String) {
+        viewModelScope.launch { runCatching { repository.unarchiveProject(id) } }
+    }
+
+    fun deleteProject(id: String) {
+        viewModelScope.launch { runCatching { repository.deleteProject(id) } }
+    }
+
+    fun moveKanbanStatus(id: String, newStatus: String, beforeId: String? = null, afterId: String? = null) {
+        viewModelScope.launch {
+            moveStatusFlow.emit(MoveCommand(id, newStatus, beforeId, afterId))
+        }
+    }
+
+    fun setProjectIdOnTask(taskId: String, projectId: String?) {
+        viewModelScope.launch { runCatching { repository.setProjectIdOnTask(taskId, projectId) } }
+    }
+
+    // ── Filters / sort / preferences ───────────────────────────────
+    fun setSortOrder(order: SortOrder) {
+        _state.update { it.copy(sortOrder = order) }
+        currentUserId?.let { startObserving(it) }
+    }
+
+    fun setShowArchived(show: Boolean) {
+        _state.update { it.copy(showArchived = show) }
+        currentUserId?.let { startObserving(it) }
+    }
+
+    fun setWipLimitDoing(n: Int) {
+        prefs.wipLimitDoing = n
+        _state.update { it.copy(wipLimitDoing = n) }
+    }
+
+    // ── ProjectDetailScreen sort per-projet [F8/D53] ───────────────
+    fun setSortOrderForProject(projectId: String, order: SortOrder) {
+        prefs.setProjectDetailSortOrder(projectId, order.name)
+    }
+
+    fun getSortOrderForProject(projectId: String): SortOrder =
+        prefs.getProjectDetailSortOrder(projectId)
+            ?.let { runCatching { SortOrder.valueOf(it) }.getOrNull() }
+            ?: SortOrder.UPDATED_DESC
+}

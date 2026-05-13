@@ -43,4 +43,39 @@ interface DayTaskDao {
     // "absent from remote").
     @Query("SELECT id FROM day_tasks WHERE user_id = :userId OR user_id = ''")
     suspend fun getAllIdsForUser(userId: String): List<String>
+
+    // Update partiel project_id — utilisé par ProjectRepository.setProjectIdOnTask
+    // (Story 17-6) pour lier/délier une tâche sans charger la row entière. Le
+    // timestamp est injecté par l'appelant (pattern [F2/D47]) pour cohérence
+    // cross-platform et tests déterministes.
+    @Query("""
+        UPDATE day_tasks
+        SET project_id = :projectId, updated_at = :updatedAt
+        WHERE id = :taskId
+    """)
+    suspend fun updateProjectId(taskId: String, projectId: String?, updatedAt: Long)
+
+    // Stats agrégée GROUP BY project_id — Flow réactif [F18/D56, F-G fix N+1].
+    // Une seule query plutôt qu'une par projet. Flow émet sur chaque mutation
+    // day_tasks (local ou Realtime) via Room InvalidationTracker.
+    @Query("""
+        SELECT project_id AS projectId,
+               COUNT(*) AS taskCount,
+               COALESCE(SUM(planned_pomodoros), 0) AS plannedSum,
+               COALESCE(SUM(completed_pomodoros), 0) AS completedSum
+        FROM day_tasks
+        WHERE user_id = :userId AND project_id IS NOT NULL
+        GROUP BY project_id
+    """)
+    fun observeAllProjectStats(userId: String): Flow<List<ProjectStatsRow>>
+
+    @Query("SELECT * FROM day_tasks WHERE id = :id")
+    suspend fun getById(id: String): DayTaskEntity?
 }
+
+data class ProjectStatsRow(
+    val projectId: String,
+    val taskCount: Int,
+    val plannedSum: Int,
+    val completedSum: Int,
+)

@@ -45,6 +45,23 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_FEATURE_GOALS, true)
         set(value) { prefs.edit().putBoolean(KEY_FEATURE_GOALS, value).apply() }
 
+    // Mode Projet — Story 17-7 / Sprint 17. Local-only per-device V1 [D25/F4].
+    /** WIP limit for the Doing column (Kanban warning visuel, pas bloquant). Default: 3. */
+    var wipLimitDoing: Int
+        get() = prefs.getInt(KEY_WIP_LIMIT_DOING, 3)
+        set(value) { prefs.edit().putInt(KEY_WIP_LIMIT_DOING, value).apply() }
+
+    /**
+     * Sort order persisté par projet pour ProjectDetailScreen. Retourne null si jamais
+     * set — l'appelant (Story 17-10 ViewModel) applique son défaut via SortOrder enum.
+     */
+    fun getProjectDetailSortOrder(projectId: String): String? =
+        prefs.getString("project_detail_sort_$projectId", null)
+
+    fun setProjectDetailSortOrder(projectId: String, order: String) {
+        prefs.edit().putString("project_detail_sort_$projectId", order).apply()
+    }
+
     companion object {
         private const val PREFS_NAME          = "app_preferences"
         private const val KEY_AUTO_CHAIN      = "auto_chain"
@@ -54,5 +71,6 @@ class AppPreferences(context: Context) {
         private const val KEY_SOUND_3MIN      = "sound_3min"
         private const val KEY_SOUND_1MIN      = "sound_1min"
         private const val KEY_FEATURE_GOALS   = "feature_goals"
+        private const val KEY_WIP_LIMIT_DOING = "wip_limit_doing"
     }
 }

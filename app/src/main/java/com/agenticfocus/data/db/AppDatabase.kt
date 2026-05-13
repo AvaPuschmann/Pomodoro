@@ -10,6 +10,7 @@ import com.agenticfocus.data.dao.DayTaskDao
 import com.agenticfocus.data.dao.DomainDao
 import com.agenticfocus.data.dao.GoalDao
 import com.agenticfocus.data.dao.PomodoroSessionDao
+import com.agenticfocus.data.dao.ProjectDao
 import com.agenticfocus.data.dao.RoutineDao
 import com.agenticfocus.data.dao.StatsDao
 import com.agenticfocus.data.dao.SubtaskDao
@@ -53,6 +54,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun subtaskDao(): SubtaskDao
     abstract fun goalDao(): GoalDao
     abstract fun routineDao(): RoutineDao
+    abstract fun projectDao(): ProjectDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
