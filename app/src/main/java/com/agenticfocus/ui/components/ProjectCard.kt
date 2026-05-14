@@ -108,7 +108,7 @@ fun ProjectCard(
                         fontSize = 12.sp,
                     )
                 }
-                // Footer ligne 2 — stats : N tâches + X/Y pomodoros
+                // Footer ligne 2 — stats : N tâches + X/Y pomodoros + AgeBadge (Story 22-3)
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Text(
                         text = "📝 ${stats?.taskCount ?: 0} tâches",
@@ -121,6 +121,8 @@ fun ProjectCard(
                         color = SubtleWhite,
                         fontSize = 12.sp,
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    AgeBadge(project = project)
                 }
             }
         }
