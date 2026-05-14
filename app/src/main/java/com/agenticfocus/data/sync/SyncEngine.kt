@@ -13,6 +13,7 @@ import com.agenticfocus.data.entity.RoutineEntity
 import com.agenticfocus.data.entity.RoutineItemEntity
 import com.agenticfocus.data.entity.SubtaskEntity
 import com.agenticfocus.data.entity.SyncQueueEntity
+import com.agenticfocus.data.entity.TagEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
 import com.agenticfocus.data.supabase.SupabaseClientProvider
 import com.agenticfocus.data.supabase.dto.toDto
@@ -238,6 +239,27 @@ object SyncEngine {
         }
     }
 
+    // ── Tag — Story 22-2 / Sprint 20 ──────────────────────────────────────────
+
+    suspend fun upsertTag(entity: TagEntity) {
+        val dto = entity.toDto()
+        if (isConnected()) {
+            if (!tryUpsert("tags") { SupabaseClientProvider.client.from("tags").upsert(dto) }) {
+                enqueue("tags", entity.id, "UPSERT", Json.encodeToString(dto))
+            }
+        } else {
+            enqueue("tags", entity.id, "UPSERT", Json.encodeToString(dto))
+        }
+    }
+
+    suspend fun deleteTag(id: String) {
+        if (isConnected()) {
+            if (!tryDelete("tags", id)) enqueue("tags", id, "DELETE", "{}")
+        } else {
+            enqueue("tags", id, "DELETE", "{}")
+        }
+    }
+
     // ── Flush (process offline queue) ─────────────────────────────────────────
 
     suspend fun flush() {
@@ -339,6 +361,10 @@ object SyncEngine {
                 "projects" -> {
                     val dto = Json.decodeFromString<com.agenticfocus.data.supabase.dto.ProjectDto>(entry.payload)
                     SupabaseClientProvider.client.from("projects").upsert(dto)
+                }
+                "tags" -> {
+                    val dto = Json.decodeFromString<com.agenticfocus.data.supabase.dto.TagDto>(entry.payload)
+                    SupabaseClientProvider.client.from("tags").upsert(dto)
                 }
                 else -> { /* unknown table — discard */ }
             }

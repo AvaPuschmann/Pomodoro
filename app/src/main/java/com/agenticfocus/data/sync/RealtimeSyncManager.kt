@@ -13,6 +13,7 @@ import com.agenticfocus.data.supabase.dto.ProjectDto
 import com.agenticfocus.data.supabase.dto.RoutineDto
 import com.agenticfocus.data.supabase.dto.RoutineItemDto
 import com.agenticfocus.data.supabase.dto.SubtaskDto
+import com.agenticfocus.data.supabase.dto.TagDto
 import com.agenticfocus.data.supabase.dto.TaskTemplateDto
 import com.agenticfocus.data.supabase.dto.toEntity
 import io.github.jan.supabase.postgrest.from
@@ -126,6 +127,11 @@ object RealtimeSyncManager {
                         onUpsert = { dto -> db?.projectDao()?.upsert(dto.toEntity()) },
                         onDeleteById = { id -> db?.projectDao()?.deleteById(id) }
                     )
+                    // Story 22-2 / Sprint 20 — Tags subscription (shared with Library Desktop).
+                    subscribeToTable<TagDto>(ch, "tags", userId, scope,
+                        onUpsert = { dto -> db?.tagDao()?.upsert(dto.toEntity()) },
+                        onDeleteById = { id -> db?.tagDao()?.deleteById(id) }
+                    )
                 }
 
                 // Belt-and-suspenders: even though subscribeToTable now suspends until
@@ -134,7 +140,7 @@ object RealtimeSyncManager {
                 // after onStart due to Kotlin Flow operator ordering. A short delay gives
                 // the producer block time to finish registration before SUBSCRIBE is sent.
                 delay(300)
-                val subCount = if (BuildConfig.FEATURE_PROJECTS) 9 else 8
+                val subCount = if (BuildConfig.FEATURE_PROJECTS) 10 else 8
                 Log.d(TAG, "All $subCount Realtime subscriptions registered, calling channel.subscribe()")
                 ch.subscribe()
 
@@ -301,6 +307,15 @@ object RealtimeSyncManager {
                     projects.forEach { db.projectDao().upsert(it.toEntity()) }
                 }
                 Log.d(TAG, "Pulled ${projects.size} projects in ${System.currentTimeMillis() - tProjects}ms")
+
+                // Story 22-2 / Sprint 20 — Pull tags after projects (project.tag_ids reference Tag.id).
+                val tTags = System.currentTimeMillis()
+                val tags = fetchAllUserRows<TagDto>("tags", userId)
+                db.withTransaction {
+                    db.tagDao().deleteAll()
+                    tags.forEach { db.tagDao().upsert(it.toEntity()) }
+                }
+                Log.d(TAG, "Pulled ${tags.size} tags in ${System.currentTimeMillis() - tTags}ms")
             }
 
             // ── Day tasks: reconciliation (atomic, sync_queue protected, F1+F2+F3) ─
