@@ -16,9 +16,15 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import com.agenticfocus.BuildConfig
+import com.agenticfocus.ui.components.WiaThresholds
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +48,7 @@ fun SettingsScreen(
     onSignOut: () -> Unit,
     onManualSync: () -> Unit,
     onClose: (() -> Unit)? = null,  // Story 18-1 — null = back-compat (pas d'overlay)
+    onSaveWiaThresholds: ((WiaThresholds) -> Unit)? = null,  // Story 22-5
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val context = LocalContext.current
@@ -119,6 +126,33 @@ fun SettingsScreen(
             checked = featureRoutines,
             onCheckedChange = { featureRoutines = it; prefs.featureRoutines = it }
         )
+
+        // ── Section: Seuils Work Item Age (Mode Projet) — Story 22-5 ─────────────
+        if (BuildConfig.FEATURE_PROJECTS) {
+            SectionHeader("Seuils Work Item Age", topPadding = true)
+            WiaThresholdsPanel(
+                initialGreen = prefs.wiaThresholdsGreen,
+                initialYellow = prefs.wiaThresholdsYellow,
+                initialOrange = prefs.wiaThresholdsOrange,
+                onSave = { g, y, o ->
+                    // Auto-correction green < yellow < orange.
+                    val safeGreen = g.coerceAtLeast(1)
+                    val safeYellow = y.coerceAtLeast(safeGreen + 1)
+                    val safeOrange = o.coerceAtLeast(safeYellow + 1)
+                    prefs.wiaThresholdsGreen = safeGreen
+                    prefs.wiaThresholdsYellow = safeYellow
+                    prefs.wiaThresholdsOrange = safeOrange
+                    onSaveWiaThresholds?.invoke(WiaThresholds(safeGreen, safeYellow, safeOrange))
+                    Triple(safeGreen, safeYellow, safeOrange)
+                },
+                onReset = {
+                    prefs.wiaThresholdsGreen = 7
+                    prefs.wiaThresholdsYellow = 21
+                    prefs.wiaThresholdsOrange = 45
+                    onSaveWiaThresholds?.invoke(WiaThresholds(7, 21, 45))
+                }
+            )
+        }
 
         // ── Section: Sons ────────────────────────────────────────────────────────
         SectionHeader("Sons", topPadding = true)
@@ -229,6 +263,112 @@ private fun SectionHeader(title: String, topPadding: Boolean = false) {
         modifier = Modifier.padding(top = if (topPadding) 16.dp else 8.dp)
     )
     HorizontalDivider(color = SubtleWhite.copy(alpha = 0.2f))
+}
+
+@Composable
+private fun WiaThresholdsPanel(
+    initialGreen: Int,
+    initialYellow: Int,
+    initialOrange: Int,
+    onSave: (g: Int, y: Int, o: Int) -> Triple<Int, Int, Int>,
+    onReset: () -> Unit,
+) {
+    var green by remember { mutableStateOf(initialGreen.toString()) }
+    var yellow by remember { mutableStateOf(initialYellow.toString()) }
+    var orange by remember { mutableStateOf(initialOrange.toString()) }
+    var feedback by remember { mutableStateOf<String?>(null) }
+
+    Text(
+        text = "Configure les seuils (en jours) qui déterminent la couleur du badge âge sur les cards Kanban.",
+        color = SubtleWhite,
+        fontSize = 12.sp,
+        modifier = Modifier.padding(top = 6.dp, bottom = 8.dp)
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value = green,
+            onValueChange = { green = it.filter(Char::isDigit).take(3) },
+            label = { Text("🟢 Vert <", color = SubtleWhite) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = TextWhite,
+                unfocusedTextColor = TextWhite,
+            ),
+            singleLine = true,
+        )
+        OutlinedTextField(
+            value = yellow,
+            onValueChange = { yellow = it.filter(Char::isDigit).take(3) },
+            label = { Text("🟡 Jaune <", color = SubtleWhite) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = TextWhite,
+                unfocusedTextColor = TextWhite,
+            ),
+            singleLine = true,
+        )
+        OutlinedTextField(
+            value = orange,
+            onValueChange = { orange = it.filter(Char::isDigit).take(3) },
+            label = { Text("🟠 Orange <", color = SubtleWhite) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.weight(1f),
+            colors = TextFieldDefaults.colors(
+                focusedTextColor = TextWhite,
+                unfocusedTextColor = TextWhite,
+            ),
+            singleLine = true,
+        )
+    }
+
+    if (feedback != null) {
+        Text(
+            text = feedback ?: "",
+            color = SubtleWhite,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Button(
+            onClick = {
+                val g = green.toIntOrNull() ?: 7
+                val y = yellow.toIntOrNull() ?: 21
+                val o = orange.toIntOrNull() ?: 45
+                val (sg, sy, so) = onSave(g, y, o)
+                green = sg.toString(); yellow = sy.toString(); orange = so.toString()
+                feedback = if (g != sg || y != sy || o != so)
+                    "Seuils auto-corrigés (vert < jaune < orange)"
+                else "Enregistré"
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = TomatoRed),
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("Enregistrer", color = TextWhite)
+        }
+        OutlinedButton(
+            onClick = {
+                onReset()
+                green = "7"; yellow = "21"; orange = "45"
+                feedback = "Réinitialisé"
+            },
+            modifier = Modifier.weight(1f)
+        ) {
+            Text("Réinitialiser", color = TextWhite)
+        }
+    }
 }
 
 @Composable

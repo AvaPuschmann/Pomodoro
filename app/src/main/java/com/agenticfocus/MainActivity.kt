@@ -316,6 +316,20 @@ class MainActivity : ComponentActivity() {
                                 }
                             ) {
 
+                            // Story 22-5 / Sprint 20 — WIA thresholds from AppPreferences, live update on Save.
+                            val prefsForWia = remember { com.agenticfocus.data.AppPreferences(this@MainActivity) }
+                            var wiaThresholds by remember {
+                                mutableStateOf(
+                                    com.agenticfocus.ui.components.WiaThresholds(
+                                        green = prefsForWia.wiaThresholdsGreen,
+                                        yellow = prefsForWia.wiaThresholdsYellow,
+                                        orange = prefsForWia.wiaThresholdsOrange,
+                                    )
+                                )
+                            }
+                            androidx.compose.runtime.CompositionLocalProvider(
+                                com.agenticfocus.ui.components.LocalWiaThresholds provides wiaThresholds
+                            ) {
                             Scaffold(
                                 snackbarHost = { SnackbarHost(snackbarHostState) },
                                 topBar = {
@@ -364,6 +378,10 @@ class MainActivity : ComponentActivity() {
                                             }
                                         },
                                         onClose = { showSettings = false },
+                                        onSaveWiaThresholds = { newThresholds ->
+                                            // Story 22-5 — Live update propagation via CompositionLocal.
+                                            wiaThresholds = newThresholds
+                                        },
                                         contentPadding = innerPadding
                                     )
                                 } else {
@@ -476,6 +494,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                            } // CompositionLocalProvider close — Story 22-5
                             } // ModalNavigationDrawer content lambda close — Story 18-1bis
                         }
                     }

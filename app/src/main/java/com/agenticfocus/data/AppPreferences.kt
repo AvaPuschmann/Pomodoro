@@ -94,6 +94,18 @@ class AppPreferences(context: Context) {
         prefs.edit().putString("project_detail_sort_$projectId", order).apply()
     }
 
+    // Story 22-5 / Sprint 20 — Work Item Age thresholds (en jours).
+    // Defaults : 7 / 21 / 45 (cohérent desktop workItemAge.ts DEFAULT_THRESHOLDS).
+    var wiaThresholdsGreen: Int
+        get() = prefs.getInt(KEY_WIA_THRESH_GREEN, 7)
+        set(value) { prefs.edit().putInt(KEY_WIA_THRESH_GREEN, value).apply() }
+    var wiaThresholdsYellow: Int
+        get() = prefs.getInt(KEY_WIA_THRESH_YELLOW, 21)
+        set(value) { prefs.edit().putInt(KEY_WIA_THRESH_YELLOW, value).apply() }
+    var wiaThresholdsOrange: Int
+        get() = prefs.getInt(KEY_WIA_THRESH_ORANGE, 45)
+        set(value) { prefs.edit().putInt(KEY_WIA_THRESH_ORANGE, value).apply() }
+
     companion object {
         private const val PREFS_NAME          = "app_preferences"
         private const val KEY_AUTO_CHAIN      = "auto_chain"
@@ -112,5 +124,8 @@ class AppPreferences(context: Context) {
         private const val KEY_LABEL_TODO        = "label_todo"
         private const val KEY_LABEL_DOING       = "label_doing"
         private const val KEY_LABEL_DONE        = "label_done"
+        private const val KEY_WIA_THRESH_GREEN  = "wia_thresh_green"
+        private const val KEY_WIA_THRESH_YELLOW = "wia_thresh_yellow"
+        private const val KEY_WIA_THRESH_ORANGE = "wia_thresh_orange"
     }
 }
