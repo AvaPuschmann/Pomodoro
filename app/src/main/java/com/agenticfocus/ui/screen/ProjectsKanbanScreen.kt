@@ -229,6 +229,7 @@ fun ProjectsKanbanScreen(
                     projects = columnProjects,
                     statsByProject = state.statsByProject,
                     domains = domains,
+                    tags = libraryState.tags,
                     wipLimit = state.wipLimitByStatus[status] ?: 0,
                     onOpenProject = onOpenProject,
                     onLongPress = { p -> actionsForProject = p }
@@ -354,6 +355,7 @@ private fun KanbanColumn(
     projects: List<ProjectEntity>,
     statsByProject: Map<String, com.agenticfocus.data.repository.ProjectStats>,
     domains: List<com.agenticfocus.data.entity.DomainEntity>,
+    tags: List<com.agenticfocus.data.entity.TagEntity>,  // Story 22-2c / Sprint 20
     wipLimit: Int,  // 0 = illimité (pas de warning)
     onOpenProject: (String) -> Unit,
     onLongPress: (ProjectEntity) -> Unit,
@@ -394,6 +396,7 @@ private fun KanbanColumn(
                         project = p,
                         stats = statsByProject[p.id],
                         domains = domains,
+                        tags = tags,
                         onClick = { onOpenProject(p.id) },
                         onLongPress = { onLongPress(p) }
                     )

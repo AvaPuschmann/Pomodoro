@@ -77,6 +77,7 @@ class ProjectRepository(
         kanbanStatus: String = KanbanStatus.BACKLOG,
         domainId: String? = null,
         targetDate: Long? = null,
+        tagIds: List<String> = emptyList(),  // Story 22-2c / Sprint 20
     ): ProjectEntity {
         require(KanbanStatus.isValid(kanbanStatus)) {
             "kanbanStatus invalid: '$kanbanStatus', expected one of ${KanbanStatus.ALL}"
@@ -100,6 +101,7 @@ class ProjectRepository(
             updatedAt = now,
             startedAt = startedAt,
             finishedAt = finishedAt,
+            tagIds = tagIds,
         )
         projectDao.upsert(entity)
         try { SyncEngine.upsertProject(entity) } catch (_: Exception) {}
@@ -113,6 +115,7 @@ class ProjectRepository(
         kanbanStatus: String? = null,
         domainId: String? = null,
         targetDate: Long? = null,
+        tagIds: List<String>? = null,  // Story 22-2c / Sprint 20 — null = inchangé, [] explicite vide
     ): ProjectEntity {
         kanbanStatus?.let {
             require(KanbanStatus.isValid(it)) {
@@ -127,6 +130,7 @@ class ProjectRepository(
             kanbanStatus = kanbanStatus ?: existing.kanbanStatus,
             domainId = domainId ?: existing.domainId,
             targetDate = targetDate ?: existing.targetDate,
+            tagIds = tagIds ?: existing.tagIds,
             updatedAt = System.currentTimeMillis(),
             // createdAt inchangé
         )

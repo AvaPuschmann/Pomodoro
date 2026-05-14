@@ -144,11 +144,12 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         kanbanStatus: String = com.agenticfocus.data.entity.KanbanStatus.BACKLOG,
         domainId: String? = null,
         targetDate: Long? = null,
+        tagIds: List<String> = emptyList(),  // Story 22-2c / Sprint 20
     ) {
         val userId = currentUserId ?: return
         viewModelScope.launch {
             try {
-                repository.addProject(userId, name, description, kanbanStatus, domainId, targetDate)
+                repository.addProject(userId, name, description, kanbanStatus, domainId, targetDate, tagIds)
             } catch (_: Exception) { /* validation invalide silencieusement */ }
         }
     }
@@ -160,10 +161,11 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         kanbanStatus: String? = null,
         domainId: String? = null,
         targetDate: Long? = null,
+        tagIds: List<String>? = null,  // Story 22-2c / Sprint 20
     ) {
         viewModelScope.launch {
             try {
-                repository.updateProject(id, name, description, kanbanStatus, domainId, targetDate)
+                repository.updateProject(id, name, description, kanbanStatus, domainId, targetDate, tagIds)
             } catch (_: Exception) {}
         }
     }

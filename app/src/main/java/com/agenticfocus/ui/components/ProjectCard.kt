@@ -20,14 +20,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.font.FontWeight
+import androidx.core.graphics.toColorInt
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.ProjectEntity
+import com.agenticfocus.data.entity.TagEntity
 import com.agenticfocus.data.repository.ProjectStats
 import com.agenticfocus.ui.theme.GlassWhite
 import com.agenticfocus.ui.theme.SubtleWhite
@@ -50,11 +55,16 @@ fun ProjectCard(
     domains: List<DomainEntity>,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
+    tags: List<TagEntity> = emptyList(),  // Story 22-2c / Sprint 20 — all tags for resolving tagIds
     modifier: Modifier = Modifier,
 ) {
     val domain = domains.find { it.id == project.domainId }
     val borderColor = parseHexColor(domain?.color) ?: FALLBACK_GRAY
     val domainLabel = domain?.name ?: "—"
+    // Story 22-2c — résolution tagIds → TagEntity, filtrant les références orphelines.
+    val projectTags = remember(project.tagIds, tags) {
+        project.tagIds.mapNotNull { id -> tags.find { it.id == id } }
+    }
 
     Surface(
         modifier = modifier
@@ -123,6 +133,46 @@ fun ProjectCard(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     AgeBadge(project = project)
+                }
+
+                // Story 22-2c / Sprint 20 — chips tags (max 3 + +N overflow).
+                if (projectTags.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        val visible = projectTags.take(3)
+                        val overflow = projectTags.size - visible.size
+                        visible.forEach { tag ->
+                            val tagColor = runCatching { Color(tag.color.toColorInt()) }.getOrDefault(FALLBACK_GRAY)
+                            Surface(
+                                color = tagColor,
+                                shape = RoundedCornerShape(6.dp),
+                            ) {
+                                Text(
+                                    text = tag.name,
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                )
+                            }
+                        }
+                        if (overflow > 0) {
+                            Surface(
+                                color = FALLBACK_GRAY.copy(alpha = 0.4f),
+                                shape = RoundedCornerShape(6.dp),
+                            ) {
+                                Text(
+                                    text = "+$overflow",
+                                    color = Color.White,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

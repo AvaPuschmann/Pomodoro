@@ -76,6 +76,7 @@ fun ProjectFormSheet(
     var kanbanStatus by remember { mutableStateOf(project?.kanbanStatus ?: KanbanStatus.BACKLOG) }
     var domainId by remember { mutableStateOf<String?>(project?.domainId) }
     var targetDate by remember { mutableStateOf<Long?>(project?.targetDate) }
+    var tagIds by remember { mutableStateOf<List<String>>(project?.tagIds ?: emptyList()) }
     var showDatePicker by remember { mutableStateOf(false) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -193,6 +194,14 @@ fun ProjectFormSheet(
                 }
             }
 
+            // Tags — Story 22-2c / Sprint 20
+            Text("Tags", color = SubtleWhite, fontSize = 13.sp)
+            com.agenticfocus.ui.components.TagPicker(
+                allTags = libraryState.tags,
+                selectedIds = tagIds,
+                onChange = { tagIds = it },
+            )
+
             // Target date
             Text("Date cible", color = SubtleWhite, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,6 +233,7 @@ fun ProjectFormSheet(
                             kanbanStatus = kanbanStatus,
                             domainId = domainId,
                             targetDate = targetDate,
+                            tagIds = tagIds,
                         )
                     } else {
                         projectVM.updateProject(
@@ -233,6 +243,7 @@ fun ProjectFormSheet(
                             kanbanStatus = kanbanStatus,
                             domainId = domainId,
                             targetDate = targetDate,
+                            tagIds = tagIds,
                         )
                     }
                     onDismiss()
