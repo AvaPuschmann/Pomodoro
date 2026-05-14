@@ -178,6 +178,16 @@ private class FakeAuthRepository(
         }
     }
 
+    override suspend fun signUp(email: String, password: String): Result<UserInfo> {
+        return if (shouldSucceed) {
+            val user = UserInfo(userId = "user-123", email = email)
+            storedUser = user
+            Result.success(user)
+        } else {
+            Result.failure(Exception(errorMessage))
+        }
+    }
+
     override suspend fun restoreSession(): UserInfo? = storedUser
 
     override suspend fun signOut() {

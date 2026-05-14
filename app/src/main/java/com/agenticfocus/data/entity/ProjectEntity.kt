@@ -6,10 +6,11 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 // NOTE: @ColumnInfo(defaultValue=…) and indices declarations must mirror what
-// MIGRATION_15_16 creates in SQL — otherwise Room's runtime schema validation
-// crashes the app at startup with "Migration didn't properly handle: projects"
-// on devices upgrading from v15. Fresh installs are unaffected.
-// Story 16-4 / Sprint 16 / 2026-05-11.
+// MIGRATION_15_16 + MIGRATION_16_17 create in SQL — otherwise Room's runtime
+// schema validation crashes the app at startup with "Migration didn't properly
+// handle: projects" on devices upgrading.
+// Story 16-4 / Sprint 16 / 2026-05-11 (initial).
+// Story 22-1 / Sprint 20 / 2026-05-14 — added tag_ids + started_at + finished_at.
 @Entity(
     tableName = "projects",
     indices = [Index("user_id")]
@@ -34,5 +35,12 @@ data class ProjectEntity(
     @ColumnInfo(name = "created_at", defaultValue = "0")
     val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at", defaultValue = "0")
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    // Sprint 20 / Story 22-1 — Mode Projet v1.1 enrichments (parity with desktop Sprint 19)
+    @ColumnInfo(name = "tag_ids", defaultValue = "'[]'")
+    val tagIds: List<String> = emptyList(),
+    @ColumnInfo(name = "started_at")
+    val startedAt: Long? = null,
+    @ColumnInfo(name = "finished_at")
+    val finishedAt: Long? = null
 )

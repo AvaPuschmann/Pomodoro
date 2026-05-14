@@ -17,6 +17,10 @@ data class ProjectDto(
     @SerialName("is_archived") val isArchived: Boolean,
     @SerialName("created_at") val createdAt: Long,
     @SerialName("updated_at") val updatedAt: Long,
+    // Sprint 20 / Story 22-1 — Mode Projet v1.1 enrichments
+    @SerialName("tag_ids") val tagIds: List<String> = emptyList(),
+    @SerialName("started_at") val startedAt: Long? = null,
+    @SerialName("finished_at") val finishedAt: Long? = null,
 ) {
     fun toEntity(): ProjectEntity = ProjectEntity(
         id = id,
@@ -30,6 +34,9 @@ data class ProjectDto(
         isArchived = isArchived,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        tagIds = tagIds,
+        startedAt = startedAt,
+        finishedAt = finishedAt,
     )
 }
 
@@ -45,4 +52,7 @@ fun ProjectEntity.toDto(): ProjectDto = ProjectDto(
     isArchived = isArchived,
     createdAt = createdAt,
     updatedAt = updatedAt,
+    tagIds = tagIds,
+    startedAt = startedAt,
+    finishedAt = finishedAt,
 )

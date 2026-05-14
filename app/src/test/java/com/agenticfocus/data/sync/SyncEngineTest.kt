@@ -186,4 +186,8 @@ class FakeSyncQueueDao : SyncQueueDao {
     override suspend fun deleteWhereRetryExceeds(maxRetry: Int) {
         store.removeIf { it.retryCount >= maxRetry }
     }
+
+    override suspend fun deleteByEntityType(entityType: String) {
+        store.removeIf { it.entityType == entityType }
+    }
 }

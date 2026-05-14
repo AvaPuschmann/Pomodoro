@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.agenticfocus.data.dao.DayTaskDao
@@ -40,9 +41,10 @@ import com.agenticfocus.data.entity.TaskTemplateEntity
         RoutineItemEntity::class,
         ProjectEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
+@TypeConverters(TagIdsListConverter::class)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun dayTaskDao(): DayTaskDao
@@ -294,6 +296,20 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Mode Projet v1.1 enrichments — Story 22-1 / Sprint 20.
+        // Parity with desktop Sprint 19 schema delta:
+        //   tag_ids TEXT NOT NULL DEFAULT '[]'  (JSON-encoded List<String>)
+        //   started_at INTEGER (nullable, lifecycle automation Story 22-4)
+        //   finished_at INTEGER (nullable, lifecycle automation Story 22-4)
+        // tag_ids stores Tag UUIDs that match the Library Tags table (synced via Supabase).
+        private val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE projects ADD COLUMN tag_ids TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE projects ADD COLUMN started_at INTEGER")
+                db.execSQL("ALTER TABLE projects ADD COLUMN finished_at INTEGER")
+            }
+        }
+
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
@@ -398,7 +414,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "agenticfocus.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                     .build()
                     .also { INSTANCE = it }
             }

@@ -3,6 +3,7 @@ package com.agenticfocus.data.db
 import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.PomodoroSessionEntity
+import com.agenticfocus.data.entity.ProjectEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -117,5 +118,73 @@ class MigrationSchemaTest {
         assertEquals(4, entity.plannedPomodoros)
         assertEquals(2, entity.completedPomodoros)
         assertEquals("tmpl-1", entity.templateId)
+    }
+
+    // ── Story 22-1 / Sprint 20 — ProjectEntity v17 schema additions ─────────
+
+    @Test
+    fun `ProjectEntity v17 defaults tag_ids to empty list`() {
+        val entity = ProjectEntity(id = "p1")
+        assertEquals(emptyList<String>(), entity.tagIds)
+    }
+
+    @Test
+    fun `ProjectEntity v17 defaults started_at to null`() {
+        val entity = ProjectEntity(id = "p1")
+        assertEquals(null, entity.startedAt)
+    }
+
+    @Test
+    fun `ProjectEntity v17 defaults finished_at to null`() {
+        val entity = ProjectEntity(id = "p1")
+        assertEquals(null, entity.finishedAt)
+    }
+
+    @Test
+    fun `ProjectEntity v17 preserves all v16 fields`() {
+        val entity = ProjectEntity(
+            id = "p1", userId = "u1", name = "Mon projet",
+            description = "Desc", kanbanStatus = "doing", kanbanPosition = 1024.0,
+            targetDate = 1_700_000_000_000L, domainId = "d1", isArchived = false,
+            tagIds = listOf("t1", "t2"), startedAt = 1_710_000_000_000L,
+            finishedAt = null
+        )
+        assertEquals("p1", entity.id)
+        assertEquals("u1", entity.userId)
+        assertEquals("Mon projet", entity.name)
+        assertEquals("doing", entity.kanbanStatus)
+        assertEquals(1024.0, entity.kanbanPosition, 0.001)
+        assertEquals(listOf("t1", "t2"), entity.tagIds)
+        assertEquals(1_710_000_000_000L, entity.startedAt)
+        assertEquals(null, entity.finishedAt)
+    }
+
+    // ── TagIdsListConverter round-trip ──────────────────────────────────────
+
+    @Test
+    fun `TagIdsListConverter roundtrip preserves list`() {
+        val conv = TagIdsListConverter()
+        val original = listOf("uuid-1", "uuid-2", "uuid-3")
+        val json = conv.fromList(original)
+        val back = conv.toList(json)
+        assertEquals(original, back)
+    }
+
+    @Test
+    fun `TagIdsListConverter handles empty list`() {
+        val conv = TagIdsListConverter()
+        assertEquals(emptyList<String>(), conv.toList(conv.fromList(emptyList())))
+    }
+
+    @Test
+    fun `TagIdsListConverter returns empty list on blank input`() {
+        val conv = TagIdsListConverter()
+        assertEquals(emptyList<String>(), conv.toList(""))
+    }
+
+    @Test
+    fun `TagIdsListConverter returns empty list on malformed input`() {
+        val conv = TagIdsListConverter()
+        assertEquals(emptyList<String>(), conv.toList("not-json"))
     }
 }
