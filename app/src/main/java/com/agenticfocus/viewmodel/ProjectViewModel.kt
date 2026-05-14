@@ -24,7 +24,20 @@ import kotlinx.coroutines.launch
 data class ProjectUiState(
     val projects: List<ProjectEntity> = emptyList(),
     val statsByProject: Map<String, ProjectStats> = emptyMap(),
-    val wipLimitDoing: Int = 3,
+    val wipLimitDoing: Int = 3,  // back-compat (Sprint 17 17-10)
+    // Story 18-hotfix 2026-05-13 : config Kanban par colonne (0 = illimité)
+    val wipLimitByStatus: Map<String, Int> = mapOf(
+        com.agenticfocus.data.entity.KanbanStatus.BACKLOG to 0,
+        com.agenticfocus.data.entity.KanbanStatus.TODO to 0,
+        com.agenticfocus.data.entity.KanbanStatus.DOING to 3,
+        com.agenticfocus.data.entity.KanbanStatus.DONE to 0,
+    ),
+    val labelsByStatus: Map<String, String> = mapOf(
+        com.agenticfocus.data.entity.KanbanStatus.BACKLOG to "Backlog",
+        com.agenticfocus.data.entity.KanbanStatus.TODO to "Todo",
+        com.agenticfocus.data.entity.KanbanStatus.DOING to "Doing",
+        com.agenticfocus.data.entity.KanbanStatus.DONE to "Done",
+    ),
     val sortOrder: SortOrder = SortOrder.UPDATED_DESC,
     val showArchived: Boolean = false,
     val isLoading: Boolean = false,
@@ -44,7 +57,25 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
     private val prefs = AppPreferences(application)
 
     private val _state = MutableStateFlow(
-        ProjectUiState(wipLimitDoing = prefs.wipLimitDoing)
+        ProjectUiState(
+            wipLimitDoing = prefs.wipLimitDoing,
+            wipLimitByStatus = readWipLimitsFromPrefs(),
+            labelsByStatus = readLabelsFromPrefs(),
+        )
+    )
+
+    private fun readWipLimitsFromPrefs(): Map<String, Int> = mapOf(
+        com.agenticfocus.data.entity.KanbanStatus.BACKLOG to prefs.wipLimitBacklog,
+        com.agenticfocus.data.entity.KanbanStatus.TODO to prefs.wipLimitTodo,
+        com.agenticfocus.data.entity.KanbanStatus.DOING to prefs.wipLimitDoing,
+        com.agenticfocus.data.entity.KanbanStatus.DONE to prefs.wipLimitDone,
+    )
+
+    private fun readLabelsFromPrefs(): Map<String, String> = mapOf(
+        com.agenticfocus.data.entity.KanbanStatus.BACKLOG to prefs.labelBacklog,
+        com.agenticfocus.data.entity.KanbanStatus.TODO to prefs.labelTodo,
+        com.agenticfocus.data.entity.KanbanStatus.DOING to prefs.labelDoing,
+        com.agenticfocus.data.entity.KanbanStatus.DONE to prefs.labelDone,
     )
     val state: StateFlow<ProjectUiState> = _state.asStateFlow()
 
@@ -206,7 +237,39 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
 
     fun setWipLimitDoing(n: Int) {
         prefs.wipLimitDoing = n
-        _state.update { it.copy(wipLimitDoing = n) }
+        _state.update {
+            it.copy(
+                wipLimitDoing = n,
+                wipLimitByStatus = it.wipLimitByStatus + (com.agenticfocus.data.entity.KanbanStatus.DOING to n)
+            )
+        }
+    }
+
+    /** Story 18-hotfix 2026-05-13 — set label + WIP limit for one Kanban column. */
+    fun setKanbanColumnConfig(status: String, label: String, wipLimit: Int) {
+        val clean = label.trim().ifBlank {
+            when (status) {
+                com.agenticfocus.data.entity.KanbanStatus.BACKLOG -> "Backlog"
+                com.agenticfocus.data.entity.KanbanStatus.TODO -> "Todo"
+                com.agenticfocus.data.entity.KanbanStatus.DOING -> "Doing"
+                com.agenticfocus.data.entity.KanbanStatus.DONE -> "Done"
+                else -> status
+            }
+        }
+        val limit = wipLimit.coerceAtLeast(0)
+        when (status) {
+            com.agenticfocus.data.entity.KanbanStatus.BACKLOG -> { prefs.labelBacklog = clean; prefs.wipLimitBacklog = limit }
+            com.agenticfocus.data.entity.KanbanStatus.TODO -> { prefs.labelTodo = clean; prefs.wipLimitTodo = limit }
+            com.agenticfocus.data.entity.KanbanStatus.DOING -> { prefs.labelDoing = clean; prefs.wipLimitDoing = limit }
+            com.agenticfocus.data.entity.KanbanStatus.DONE -> { prefs.labelDone = clean; prefs.wipLimitDone = limit }
+        }
+        _state.update {
+            it.copy(
+                labelsByStatus = it.labelsByStatus + (status to clean),
+                wipLimitByStatus = it.wipLimitByStatus + (status to limit),
+                wipLimitDoing = if (status == com.agenticfocus.data.entity.KanbanStatus.DOING) limit else it.wipLimitDoing,
+            )
+        }
     }
 
     // ── ProjectDetailScreen sort per-projet [F8/D53] ───────────────

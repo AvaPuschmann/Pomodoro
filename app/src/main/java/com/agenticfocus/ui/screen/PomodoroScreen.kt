@@ -89,7 +89,11 @@ fun PomodoroScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .imePadding()
-                .padding(bottom = contentPadding.calculateBottomPadding()),
+                // Fix 2026-05-13 : top padding aussi (TopAppBar globale Sprint 18-1bis)
+                .padding(
+                    top = contentPadding.calculateTopPadding(),
+                    bottom = contentPadding.calculateBottomPadding()
+                ),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(40.dp))

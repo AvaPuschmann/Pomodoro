@@ -10,7 +10,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.agenticfocus.ui.theme.TextWhite
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
@@ -25,8 +30,20 @@ import com.agenticfocus.ui.screen.ProjectFormSheet
 import com.agenticfocus.ui.screen.ProjectsKanbanScreen
 import com.agenticfocus.data.entity.ProjectEntity
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.ui.graphics.Color
 import java.time.LocalDate
 
@@ -237,7 +254,7 @@ class MainActivity : ComponentActivity() {
                             }
 
                             // Story 18-1 — liste tabs dynamique gated FEATURE_PROJECTS.
-                            // SETTINGS retiré du bottom nav, accessible via topbar Library.
+                            // SETTINGS retiré du bottom nav, accessible via drawer hamburger ≡ topbar globale.
                             val visibleTabs = remember {
                                 buildList {
                                     add(Tab.TIMER)
@@ -248,8 +265,79 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
+                            // Story 18-1bis — Drawer slide-in pour Settings + actions globales.
+                            val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+
+                            ModalNavigationDrawer(
+                                drawerState = drawerState,
+                                drawerContent = {
+                                    ModalDrawerSheet {
+                                        Spacer(modifier = Modifier.size(24.dp))
+                                        Text(
+                                            "AgenticFocus",
+                                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                            color = TextWhite,
+                                            fontSize = 16.sp
+                                        )
+                                        Spacer(modifier = Modifier.size(8.dp))
+                                        NavigationDrawerItem(
+                                            label = { Text("Réglages") },
+                                            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                            selected = false,
+                                            onClick = {
+                                                showSettings = true
+                                                coroutineScope.launch { drawerState.close() }
+                                            },
+                                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                                        )
+                                        NavigationDrawerItem(
+                                            label = { Text("Synchroniser") },
+                                            icon = { Icon(Icons.Default.Sync, contentDescription = null) },
+                                            selected = false,
+                                            onClick = {
+                                                this@MainActivity.authenticatedUserId?.let { uid ->
+                                                    RealtimeSyncManager.triggerPull(uid)
+                                                }
+                                                coroutineScope.launch { drawerState.close() }
+                                            },
+                                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                                        )
+                                        NavigationDrawerItem(
+                                            label = { Text("Déconnexion") },
+                                            icon = { Icon(Icons.Default.Logout, contentDescription = null) },
+                                            selected = false,
+                                            onClick = {
+                                                coroutineScope.launch { drawerState.close() }
+                                                authVM.signOut()
+                                            },
+                                            modifier = Modifier.padding(NavigationDrawerItemDefaults.ItemPadding)
+                                        )
+                                    }
+                                }
+                            ) {
+
                             Scaffold(
                                 snackbarHost = { SnackbarHost(snackbarHostState) },
+                                topBar = {
+                                    // Story 18-1bis — TopAppBar globale avec hamburger ≡ seul (drawer slide-in).
+                                    // Title vide pour éviter superposition avec headers per-écran (date Day
+                                    // Planner, "Ma Bibliothèque" Library, etc.). Cachée si overlay Settings.
+                                    if (!showSettings) {
+                                        TopAppBar(
+                                            title = {},  // intentionnel — chaque écran a son propre header
+                                            navigationIcon = {
+                                                IconButton(onClick = {
+                                                    coroutineScope.launch { drawerState.open() }
+                                                }) {
+                                                    Icon(Icons.Default.Menu, contentDescription = "Menu")
+                                                }
+                                            },
+                                            colors = TopAppBarDefaults.topAppBarColors(
+                                                containerColor = Color.Transparent
+                                            )
+                                        )
+                                    }
+                                },
                                 bottomBar = {
                                     // Cache le bottom nav si l'overlay Settings est actif (UX cohérence)
                                     if (!showSettings) {
@@ -388,6 +476,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                            } // ModalNavigationDrawer content lambda close — Story 18-1bis
                         }
                     }
                 }

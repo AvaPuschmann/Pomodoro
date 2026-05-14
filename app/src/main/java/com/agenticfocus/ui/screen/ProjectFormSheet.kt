@@ -11,11 +11,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -126,38 +131,63 @@ fun ProjectFormSheet(
                 }
             }
 
-            // Domain selector
+            // Domain selector — combo box ExposedDropdownMenu (gain de place vs chips)
             if (domains.isNotEmpty()) {
                 Text("Domaine", color = SubtleWhite, fontSize = 13.sp)
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        ToggleChip(
-                            label = "Aucun",
-                            selected = domainId == null,
-                            selectedColor = Color(0xFF6C6C70),
-                            onClick = { domainId = null }
-                        )
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        domains.take(4).forEach { d ->
-                            ToggleChip(
-                                label = d.name,
-                                selected = domainId == d.id,
-                                selectedColor = parseHexColorOr(d.color, Color(0xFF6C6C70)),
-                                onClick = { domainId = d.id }
+                var domainMenuExpanded by remember { mutableStateOf(false) }
+                val selectedDomain = domains.find { it.id == domainId }
+                ExposedDropdownMenuBox(
+                    expanded = domainMenuExpanded,
+                    onExpandedChange = { domainMenuExpanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = selectedDomain?.name ?: "Aucun",
+                        onValueChange = {},
+                        readOnly = true,
+                        leadingIcon = {
+                            // Pastille couleur du domaine sélectionné
+                            androidx.compose.foundation.layout.Box(
+                                modifier = Modifier
+                                    .size(14.dp)
+                                    .background(
+                                        color = if (selectedDomain != null) parseHexColorOr(selectedDomain.color, Color(0xFF6C6C70)) else Color(0xFF6C6C70),
+                                        shape = CircleShape
+                                    )
                             )
-                        }
-                    }
-                    if (domains.size > 4) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            domains.drop(4).forEach { d ->
-                                ToggleChip(
-                                    label = d.name,
-                                    selected = domainId == d.id,
-                                    selectedColor = parseHexColorOr(d.color, Color(0xFF6C6C70)),
-                                    onClick = { domainId = d.id }
+                        },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = domainMenuExpanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(),
+                        colors = formColors(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = domainMenuExpanded,
+                        onDismissRequest = { domainMenuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Aucun") },
+                            leadingIcon = {
+                                androidx.compose.foundation.layout.Box(
+                                    modifier = Modifier
+                                        .size(14.dp)
+                                        .background(Color(0xFF6C6C70), CircleShape)
                                 )
-                            }
+                            },
+                            onClick = { domainId = null; domainMenuExpanded = false }
+                        )
+                        domains.forEach { d ->
+                            DropdownMenuItem(
+                                text = { Text(d.name) },
+                                leadingIcon = {
+                                    androidx.compose.foundation.layout.Box(
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .background(parseHexColorOr(d.color, Color(0xFF6C6C70)), CircleShape)
+                                    )
+                                },
+                                onClick = { domainId = d.id; domainMenuExpanded = false }
+                            )
                         }
                     }
                 }

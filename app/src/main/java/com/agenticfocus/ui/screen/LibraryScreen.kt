@@ -133,6 +133,11 @@ fun LibraryScreen(
     }
 
     val state by viewModel.state.collectAsStateWithLifecycle()
+    // Story 18-hotfix : gate Routines section selon AppPreferences.featureRoutines
+    // Lecture à chaque recomposition (pas de remember) pour que le toggle Settings
+    // prenne effet immédiat sans redémarrer l'app.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val featureRoutines = com.agenticfocus.data.AppPreferences(ctx).featureRoutines
     var showAddTemplateDialog by rememberSaveable { mutableStateOf(false) }
     var showAddDomainDialog by rememberSaveable { mutableStateOf(false) }
     var editingDomain by remember { mutableStateOf<DomainEntity?>(null) }
@@ -172,7 +177,11 @@ fun LibraryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = contentPadding.calculateBottomPadding())
+                // Fix 2026-05-13 : top padding aussi (TopAppBar globale Sprint 18-1bis)
+                .padding(
+                    top = contentPadding.calculateTopPadding(),
+                    bottom = contentPadding.calculateBottomPadding()
+                )
         ) {
             // Header (Story 18-1 — ⚙ Settings IconButton ajouté à droite)
             Row(
@@ -243,7 +252,8 @@ fun LibraryScreen(
             ) {
                 // D3 — F1: Routines entry must be wrapped in `item { ... }` since LazyColumn
                 //         scope rejects bare composables. Hidden while searching to keep results clean.
-                if (!isSearching) {
+                // Story 18-hotfix : aussi caché si feature flag désactivé via Settings.
+                if (!isSearching && featureRoutines) {
                     item(key = "routines_entry") {
                         Surface(
                             modifier = Modifier

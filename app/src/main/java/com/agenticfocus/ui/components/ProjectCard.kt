@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -65,7 +67,13 @@ fun ProjectCard(
         shape = RoundedCornerShape(8.dp),
         color = GlassWhite,
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
+        // height(IntrinsicSize.Min) pour que la bordure Box fillMaxHeight
+        // matche la hauteur naturelle du Column content (fix bordure invisible).
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(IntrinsicSize.Min)
+        ) {
             // Bordure gauche couleur domaine — 4dp
             Box(
                 modifier = Modifier

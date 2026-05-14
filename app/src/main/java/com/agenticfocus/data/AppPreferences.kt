@@ -45,11 +45,43 @@ class AppPreferences(context: Context) {
         get() = prefs.getBoolean(KEY_FEATURE_GOALS, true)
         set(value) { prefs.edit().putBoolean(KEY_FEATURE_GOALS, value).apply() }
 
+    /** Feature flag — show/hide Routines module (Library sub-tab + injection). Default: true. */
+    var featureRoutines: Boolean
+        get() = prefs.getBoolean(KEY_FEATURE_ROUTINES, true)
+        set(value) { prefs.edit().putBoolean(KEY_FEATURE_ROUTINES, value).apply() }
+
     // Mode Projet — Story 17-7 / Sprint 17. Local-only per-device V1 [D25/F4].
-    /** WIP limit for the Doing column (Kanban warning visuel, pas bloquant). Default: 3. */
+    // 4 colonnes Kanban : WIP limit par colonne (0 = illimité, défaut Doing=3 reste WIP convention).
+    /** WIP limit pour Backlog. 0 = illimité (par défaut). */
+    var wipLimitBacklog: Int
+        get() = prefs.getInt(KEY_WIP_LIMIT_BACKLOG, 0)
+        set(value) { prefs.edit().putInt(KEY_WIP_LIMIT_BACKLOG, value).apply() }
+    /** WIP limit pour Todo. 0 = illimité (par défaut). */
+    var wipLimitTodo: Int
+        get() = prefs.getInt(KEY_WIP_LIMIT_TODO, 0)
+        set(value) { prefs.edit().putInt(KEY_WIP_LIMIT_TODO, value).apply() }
+    /** WIP limit pour Doing. Default 3 (warning visuel, pas bloquant). */
     var wipLimitDoing: Int
         get() = prefs.getInt(KEY_WIP_LIMIT_DOING, 3)
         set(value) { prefs.edit().putInt(KEY_WIP_LIMIT_DOING, value).apply() }
+    /** WIP limit pour Done. 0 = illimité (par défaut — historique). */
+    var wipLimitDone: Int
+        get() = prefs.getInt(KEY_WIP_LIMIT_DONE, 0)
+        set(value) { prefs.edit().putInt(KEY_WIP_LIMIT_DONE, value).apply() }
+
+    /** Nom personnalisé des colonnes Kanban. Defaults = noms classiques. */
+    var labelBacklog: String
+        get() = prefs.getString(KEY_LABEL_BACKLOG, "Backlog") ?: "Backlog"
+        set(value) { prefs.edit().putString(KEY_LABEL_BACKLOG, value).apply() }
+    var labelTodo: String
+        get() = prefs.getString(KEY_LABEL_TODO, "Todo") ?: "Todo"
+        set(value) { prefs.edit().putString(KEY_LABEL_TODO, value).apply() }
+    var labelDoing: String
+        get() = prefs.getString(KEY_LABEL_DOING, "Doing") ?: "Doing"
+        set(value) { prefs.edit().putString(KEY_LABEL_DOING, value).apply() }
+    var labelDone: String
+        get() = prefs.getString(KEY_LABEL_DONE, "Done") ?: "Done"
+        set(value) { prefs.edit().putString(KEY_LABEL_DONE, value).apply() }
 
     /**
      * Sort order persisté par projet pour ProjectDetailScreen. Retourne null si jamais
@@ -71,6 +103,14 @@ class AppPreferences(context: Context) {
         private const val KEY_SOUND_3MIN      = "sound_3min"
         private const val KEY_SOUND_1MIN      = "sound_1min"
         private const val KEY_FEATURE_GOALS   = "feature_goals"
-        private const val KEY_WIP_LIMIT_DOING = "wip_limit_doing"
+        private const val KEY_FEATURE_ROUTINES = "feature_routines"
+        private const val KEY_WIP_LIMIT_BACKLOG = "wip_limit_backlog"
+        private const val KEY_WIP_LIMIT_TODO    = "wip_limit_todo"
+        private const val KEY_WIP_LIMIT_DOING   = "wip_limit_doing"
+        private const val KEY_WIP_LIMIT_DONE    = "wip_limit_done"
+        private const val KEY_LABEL_BACKLOG     = "label_backlog"
+        private const val KEY_LABEL_TODO        = "label_todo"
+        private const val KEY_LABEL_DOING       = "label_doing"
+        private const val KEY_LABEL_DONE        = "label_done"
     }
 }

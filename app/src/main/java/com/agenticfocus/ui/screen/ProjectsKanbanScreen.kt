@@ -84,13 +84,14 @@ fun ProjectsKanbanScreen(
     val libraryState by libraryVM.state.collectAsStateWithLifecycle()
     val domains = libraryState.domains
 
-    val tabs = listOf("Backlog", "Todo", "Doing", "Done")
     val statuses = KanbanStatus.ALL  // ["backlog","todo","doing","done"]
+    val tabs = statuses.map { state.labelsByStatus[it] ?: it }
     val pagerState = rememberPagerState(pageCount = { 4 })
     val scope = rememberCoroutineScope()
 
     var menuExpanded by remember { mutableStateOf(false) }
     var actionsForProject by remember { mutableStateOf<ProjectEntity?>(null) }
+    var showKanbanConfig by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -154,6 +155,11 @@ fun ProjectsKanbanScreen(
                         },
                         onClick = { projectVM.setShowArchived(!state.showArchived); menuExpanded = false }
                     )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("⚙ Configurer Kanban") },
+                        onClick = { showKanbanConfig = true; menuExpanded = false }
+                    )
                 }
             }
         }
@@ -167,12 +173,41 @@ fun ProjectsKanbanScreen(
                 snapshotFlow { pagerState.currentPage }.collect { /* no-op : TabRow se met à jour via selectedTabIndex */ }
             }
 
+            // Count par colonne — Story 18-hotfix UX 2026-05-13.
+            // Compte les projets selon le statut + filtre archivé courant (cohérent avec affichage).
+            val visibleProjects = remember(state.projects, state.showArchived) {
+                if (state.showArchived) state.projects else state.projects.filter { !it.isArchived }
+            }
+            val countsByStatus = remember(visibleProjects) {
+                statuses.associateWith { st -> visibleProjects.count { it.kanbanStatus == st } }
+            }
+
             TabRow(selectedTabIndex = pagerState.currentPage) {
                 tabs.forEachIndexed { i, label ->
+                    val st = statuses[i]
+                    val count = countsByStatus[st] ?: 0
+                    val limit = state.wipLimitByStatus[st] ?: 0
+                    val hasLimit = limit > 0
+                    val isOver = hasLimit && count > limit
+                    val labelColor = if (isOver) Color(0xFFFF9800) else TextWhite
                     Tab(
                         selected = i == pagerState.currentPage,
                         onClick = { scope.launch { pagerState.animateScrollToPage(i) } },
-                        text = { Text(label, fontSize = 13.sp) }
+                        text = {
+                            // 2 lignes : ligne 1 nom (+ ⚠ si over), ligne 2 WIP X/Y ou WIP X
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = if (isOver) "⚠ $label" else label,
+                                    fontSize = 13.sp,
+                                    color = labelColor,
+                                )
+                                Text(
+                                    text = if (hasLimit) "WIP $count/$limit" else "WIP $count",
+                                    fontSize = 11.sp,
+                                    color = if (isOver) Color(0xFFFF9800) else SubtleWhite,
+                                )
+                            }
+                        }
                     )
                 }
             }
@@ -182,10 +217,11 @@ fun ProjectsKanbanScreen(
                 val columnProjects = state.projects.filter { it.kanbanStatus == status }
                 KanbanColumn(
                     status = status,
+                    label = state.labelsByStatus[status] ?: status,
                     projects = columnProjects,
                     statsByProject = state.statsByProject,
                     domains = domains,
-                    wipLimitDoing = state.wipLimitDoing,
+                    wipLimit = state.wipLimitByStatus[status] ?: 0,
                     onOpenProject = onOpenProject,
                     onLongPress = { p -> actionsForProject = p }
                 )
@@ -210,7 +246,7 @@ fun ProjectsKanbanScreen(
                 statuses.forEach { st ->
                     if (st != p.kanbanStatus) {
                         DropdownMenuItem(
-                            text = { Text("Déplacer vers ${labelFor(st)}") },
+                            text = { Text("Déplacer vers ${state.labelsByStatus[st] ?: labelFor(st)}") },
                             onClick = {
                                 projectVM.moveKanbanStatus(p.id, st)
                                 actionsForProject = null
@@ -241,6 +277,14 @@ fun ProjectsKanbanScreen(
             }
         }
     }
+
+    // Story 18-hotfix 2026-05-13 — Bottom sheet config Kanban (4 labels + 4 WIP limits)
+    if (showKanbanConfig) {
+        KanbanConfigSheet(
+            projectVM = projectVM,
+            onDismiss = { showKanbanConfig = false }
+        )
+    }
 }
 
 private fun labelFor(status: String): String = when (status) {
@@ -254,45 +298,35 @@ private fun labelFor(status: String): String = when (status) {
 @Composable
 private fun KanbanColumn(
     status: String,
+    label: String,
     projects: List<ProjectEntity>,
     statsByProject: Map<String, com.agenticfocus.data.repository.ProjectStats>,
     domains: List<com.agenticfocus.data.entity.DomainEntity>,
-    wipLimitDoing: Int,
+    wipLimit: Int,  // 0 = illimité (pas de warning)
     onOpenProject: (String) -> Unit,
     onLongPress: (ProjectEntity) -> Unit,
 ) {
-    val isDoing = status == KanbanStatus.DOING
-    val overLimit = isDoing && projects.size > wipLimitDoing
-    val bgColor = if (overLimit) Color(0xFFFFF3E0) else Color.Transparent
+    val hasLimit = wipLimit > 0
+    val overLimit = hasLimit && projects.size > wipLimit
+    // Fix bug UX 2026-05-13 : #FFF3E0 (beige) écrasait le fond sombre rendant illisible.
+    // Remplacé par orange transparent très subtil pour signaler over-limit sans masquer.
+    val bgColor = if (overLimit) Color(0xFFFF9800).copy(alpha = 0.10f) else Color.Transparent
 
+    // Note : badge "⚠ WIP X/Y" interne retiré 2026-05-13 — info maintenant dans
+    // l'onglet TabRow ligne 2. Fond colonne subtil orange transparent suffit
+    // comme rappel visuel quand l'utilisateur est sur la colonne.
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(bgColor)
     ) {
-        if (overLimit) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFFF9800)
-            ) {
-                Text(
-                    text = "⚠ WIP ${projects.size}/$wipLimitDoing",
-                    color = Color.White,
-                    fontSize = 13.sp,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
-            }
-        }
         if (projects.isEmpty()) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Aucun projet ${labelFor(status).lowercase()}",
+                    text = "Aucun projet ${label.lowercase()}",
                     color = SubtleWhite,
                     fontSize = 13.sp
                 )

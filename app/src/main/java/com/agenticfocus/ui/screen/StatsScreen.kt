@@ -74,7 +74,11 @@ fun StatsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = contentPadding.calculateBottomPadding())
+                // Fix 2026-05-13 : top padding aussi (TopAppBar globale Sprint 18-1bis)
+                .padding(
+                    top = contentPadding.calculateTopPadding(),
+                    bottom = contentPadding.calculateBottomPadding()
+                )
                 .verticalScroll(rememberScrollState())
         ) {
             // Header

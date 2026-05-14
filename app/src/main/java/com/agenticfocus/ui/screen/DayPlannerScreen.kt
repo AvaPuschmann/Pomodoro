@@ -207,7 +207,13 @@ fun DayPlannerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(bottom = contentPadding.calculateBottomPadding())
+                // Fix 2026-05-13 : appliquer le TOP padding aussi (TopAppBar globale
+                // ajoutée Sprint 18-1bis Drawer) sinon DateNavigationHeader caché
+                // sous la topbar = boutons gauche/droite inaccessibles.
+                .padding(
+                    top = contentPadding.calculateTopPadding(),
+                    bottom = contentPadding.calculateBottomPadding()
+                )
                 .imePadding()
         ) {
             SyncStatusRow()

@@ -173,6 +173,14 @@ fun DayTaskRow(
                             onLongClick = { onEdit?.invoke() }
                         )
                 )
+                // Urgency icon — urgent only
+                if (task.urgency == "urgent") {
+                    Text(text = "🔥", fontSize = 14.sp)
+                }
+                // Impact icon — high impact only
+                if (task.impact == "high") {
+                    Text(text = "🎯", fontSize = 14.sp)
+                }
             }
 
             // − button — disabled at 0

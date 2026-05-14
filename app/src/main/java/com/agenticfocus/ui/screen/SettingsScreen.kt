@@ -49,6 +49,7 @@ fun SettingsScreen(
 
     var autoChain     by remember { mutableStateOf(prefs.autoChain) }
     var featureGoals  by remember { mutableStateOf(prefs.featureGoals) }
+    var featureRoutines by remember { mutableStateOf(prefs.featureRoutines) }
     var soundEnabled  by remember { mutableStateOf(prefs.soundEnabled) }
     var sound10min    by remember { mutableStateOf(prefs.sound10min) }
     var sound5min     by remember { mutableStateOf(prefs.sound5min) }
@@ -110,6 +111,13 @@ fun SettingsScreen(
             subtitle = "Affiche les objectifs du jour, de la semaine et du mois",
             checked = featureGoals,
             onCheckedChange = { featureGoals = it; prefs.featureGoals = it }
+        )
+
+        SettingToggleRow(
+            title = "Routines",
+            subtitle = "Affiche le module Routines (matin/soir) dans la bibliothèque",
+            checked = featureRoutines,
+            onCheckedChange = { featureRoutines = it; prefs.featureRoutines = it }
         )
 
         // ── Section: Sons ────────────────────────────────────────────────────────
