@@ -69,6 +69,7 @@ class ProjectRepository(
     // ── CRUD avec timestamps injection [F2/D47] ────────────────────
     // Le ViewModel ne doit JAMAIS calculer System.currentTimeMillis() pour
     // created_at/updated_at — toujours ici.
+    // Story 22-4 / Sprint 20 : lifecycle automation started_at/finished_at.
     suspend fun addProject(
         userId: String,
         name: String,
@@ -81,6 +82,10 @@ class ProjectRepository(
             "kanbanStatus invalid: '$kanbanStatus', expected one of ${KanbanStatus.ALL}"
         }
         val now = System.currentTimeMillis()
+        // If project is created already in Todo/Doing/Done (not Backlog), startedAt = now.
+        // Done at creation is unusual but legal — startedAt = finishedAt = now.
+        val startedAt = if (kanbanStatus != KanbanStatus.BACKLOG) now else null
+        val finishedAt = if (kanbanStatus == KanbanStatus.DONE) now else null
         val entity = ProjectEntity(
             id = UUID.randomUUID().toString(),
             userId = userId,
@@ -93,6 +98,8 @@ class ProjectRepository(
             isArchived = false,
             createdAt = now,
             updatedAt = now,
+            startedAt = startedAt,
+            finishedAt = finishedAt,
         )
         projectDao.upsert(entity)
         try { SyncEngine.upsertProject(entity) } catch (_: Exception) {}
@@ -184,10 +191,21 @@ class ProjectRepository(
                 insertBetween(userId, newStatus, 0.0, after.kanbanPosition)
             }
         }
+        // Story 22-4 / Sprint 20 — lifecycle automation [parity desktop projectStore.ts].
+        val now = System.currentTimeMillis()
+        val (newStartedAt, newFinishedAt) = computeLifecycleTimestamps(
+            oldStatus = existing.kanbanStatus,
+            newStatus = newStatus,
+            existingStartedAt = existing.startedAt,
+            existingFinishedAt = existing.finishedAt,
+            now = now,
+        )
         val updated = existing.copy(
             kanbanStatus = newStatus,
             kanbanPosition = newPosition,
-            updatedAt = System.currentTimeMillis(),
+            updatedAt = now,
+            startedAt = newStartedAt,
+            finishedAt = newFinishedAt,
         )
         projectDao.upsert(updated)
         try { SyncEngine.upsertProject(updated) } catch (_: Exception) {}
@@ -199,6 +217,32 @@ class ProjectRepository(
         dayTaskDao.updateProjectId(taskId, projectId, now)
         dayTaskDao.getById(taskId)?.let {
             try { SyncEngine.upsertDayTask(it) } catch (_: Exception) {}
+        }
+    }
+
+    companion object {
+        // Pure function for testability — same logic used inline in moveKanbanStatus.
+        // Returns (newStartedAt, newFinishedAt) given the transition.
+        // Story 22-4 / Sprint 20.
+        fun computeLifecycleTimestamps(
+            oldStatus: String,
+            newStatus: String,
+            existingStartedAt: Long?,
+            existingFinishedAt: Long?,
+            now: Long,
+        ): Pair<Long?, Long?> {
+            val newStartedAt: Long? = when {
+                newStatus == KanbanStatus.BACKLOG -> null
+                existingStartedAt == null -> now
+                else -> existingStartedAt
+            }
+            val newFinishedAt: Long? = when {
+                newStatus == KanbanStatus.BACKLOG -> null
+                newStatus == KanbanStatus.DONE && oldStatus != KanbanStatus.DONE -> now
+                oldStatus == KanbanStatus.DONE && newStatus != KanbanStatus.DONE -> null
+                else -> existingFinishedAt
+            }
+            return newStartedAt to newFinishedAt
         }
     }
 }
