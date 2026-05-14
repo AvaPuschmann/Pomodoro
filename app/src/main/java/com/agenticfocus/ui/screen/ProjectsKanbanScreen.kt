@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.agenticfocus.data.entity.KanbanStatus
 import com.agenticfocus.data.entity.ProjectEntity
 import com.agenticfocus.ui.components.ProjectCard
+import com.agenticfocus.ui.components.computeColumnStats
 import com.agenticfocus.ui.theme.SubtleWhite
 import com.agenticfocus.ui.theme.TextWhite
 import com.agenticfocus.viewmodel.LibraryViewModel
@@ -212,6 +213,13 @@ fun ProjectsKanbanScreen(
                 }
             }
 
+            // Story 22-6 / Sprint 20 — Column aggregated stats sous TabRow.
+            val currentStatus = statuses[pagerState.currentPage]
+            val currentColumnProjects = remember(visibleProjects, currentStatus) {
+                visibleProjects.filter { it.kanbanStatus == currentStatus }
+            }
+            ColumnAgeStatsBar(status = currentStatus, projects = currentColumnProjects)
+
             HorizontalPager(state = pagerState, modifier = Modifier.fillMaxSize()) { page ->
                 val status = statuses[page]
                 val columnProjects = state.projects.filter { it.kanbanStatus == status }
@@ -293,6 +301,50 @@ private fun labelFor(status: String): String = when (status) {
     KanbanStatus.DOING -> "Doing"
     KanbanStatus.DONE -> "Done"
     else -> status
+}
+
+/**
+ * Story 22-6 / Sprint 20 — Column aggregated stats line sous TabRow.
+ * - Backlog : caché (pas pertinent pour idées dormantes)
+ * - Todo / Doing : Avg Age + Older
+ * - Done : Avg Cycle Time + P50 + P95
+ */
+@Composable
+private fun ColumnAgeStatsBar(status: String, projects: List<ProjectEntity>) {
+    if (status == KanbanStatus.BACKLOG || projects.isEmpty()) return
+    val stats = remember(projects) { computeColumnStats(projects) }
+    val isDone = status == KanbanStatus.DONE
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (isDone) {
+            Text(
+                text = "Avg Cycle Time : ${stats.avgDays}j",
+                color = SubtleWhite,
+                fontSize = 11.sp,
+            )
+            Text(text = "·", color = SubtleWhite.copy(alpha = 0.4f), fontSize = 11.sp)
+            Text(text = "P50 : ${stats.p50Days}j", color = SubtleWhite, fontSize = 11.sp)
+            Text(text = "·", color = SubtleWhite.copy(alpha = 0.4f), fontSize = 11.sp)
+            Text(text = "P95 : ${stats.p95Days}j", color = SubtleWhite, fontSize = 11.sp)
+        } else {
+            Text(
+                text = "Avg Age : ${stats.avgDays}j",
+                color = SubtleWhite,
+                fontSize = 11.sp,
+            )
+            Text(text = "·", color = SubtleWhite.copy(alpha = 0.4f), fontSize = 11.sp)
+            Text(
+                text = "Older : ${stats.oldestDays}j",
+                color = if (stats.oldestDays > 30) Color(0xFFE53935) else SubtleWhite,
+                fontSize = 11.sp,
+            )
+        }
+    }
 }
 
 @Composable
