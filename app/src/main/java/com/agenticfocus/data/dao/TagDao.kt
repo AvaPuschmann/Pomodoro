@@ -24,9 +24,9 @@ interface TagDao {
     @Query("SELECT * FROM tags WHERE id = :id")
     suspend fun getById(id: String): TagEntity?
 
-    @Query("SELECT * FROM tags WHERE user_id = :userId ORDER BY position ASC, name ASC")
-    fun observeAll(userId: String): Flow<List<TagEntity>>
+    @Query("SELECT * FROM tags ORDER BY position ASC, name ASC")
+    fun observeAll(): Flow<List<TagEntity>>
 
-    @Query("SELECT MAX(position) FROM tags WHERE user_id = :userId")
-    suspend fun getMaxPosition(userId: String): Int?
+    @Query("SELECT MAX(position) FROM tags")
+    suspend fun getMaxPosition(): Int?
 }

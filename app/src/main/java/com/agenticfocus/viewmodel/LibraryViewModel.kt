@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.agenticfocus.data.db.AppDatabase
 import com.agenticfocus.data.entity.DomainEntity
+import com.agenticfocus.data.entity.TagEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
 import com.agenticfocus.data.repository.LibraryRepository
 import com.agenticfocus.data.sync.SyncEngine
@@ -16,24 +17,27 @@ import kotlinx.coroutines.launch
 
 data class LibraryState(
     val domains: List<DomainEntity> = emptyList(),
-    val templatesByDomain: Map<String, List<TaskTemplateEntity>> = emptyMap()
+    val templatesByDomain: Map<String, List<TaskTemplateEntity>> = emptyMap(),
+    val tags: List<TagEntity> = emptyList(),
 )
 
 class LibraryViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = LibraryRepository(
         domainDao = AppDatabase.getInstance(application).domainDao(),
-        templateDao = AppDatabase.getInstance(application).taskTemplateDao()
+        templateDao = AppDatabase.getInstance(application).taskTemplateDao(),
+        tagDao = AppDatabase.getInstance(application).tagDao(),
     )
 
     val state: StateFlow<LibraryState> = combine(
         repository.domains,
-        repository.templates
-    ) { domains, templates ->
+        repository.templates,
+        repository.tags,
+    ) { domains, templates, tags ->
         val domainIds = domains.map { it.id }.toSet()
         val validTemplates = templates.filter { it.domainId in domainIds }
         val byDomain = validTemplates.groupBy { it.domainId }
-        LibraryState(domains = domains, templatesByDomain = byDomain)
+        LibraryState(domains = domains, templatesByDomain = byDomain, tags = tags)
     }.stateIn(
         scope = viewModelScope,
         // Eagerly: keep the state populated as long as the VM is alive.
@@ -109,5 +113,24 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
 
     fun deleteDomain(id: String) {
         viewModelScope.launch { repository.deleteDomain(id) }
+    }
+
+    // ── Tags (Story 22-2 / Sprint 20) ──────────────────────────────────────
+
+    fun addTag(name: String, color: String) {
+        viewModelScope.launch { repository.addTag(name, color) }
+    }
+
+    fun updateTag(id: String, name: String, color: String) {
+        viewModelScope.launch {
+            val existing = state.value.tags.find { it.id == id } ?: return@launch
+            repository.updateTag(
+                existing.copy(name = name.trim(), color = color)
+            )
+        }
+    }
+
+    fun deleteTag(id: String) {
+        viewModelScope.launch { repository.deleteTag(id) }
     }
 }

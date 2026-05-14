@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,6 +74,7 @@ import androidx.core.graphics.toColorInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.agenticfocus.R
 import com.agenticfocus.data.entity.DomainEntity
+import com.agenticfocus.data.entity.TagEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
 import com.agenticfocus.ui.components.ToggleChip
 import com.agenticfocus.ui.components.formatDueDate
@@ -140,8 +143,10 @@ fun LibraryScreen(
     val featureRoutines = com.agenticfocus.data.AppPreferences(ctx).featureRoutines
     var showAddTemplateDialog by rememberSaveable { mutableStateOf(false) }
     var showAddDomainDialog by rememberSaveable { mutableStateOf(false) }
+    var showAddTagDialog by rememberSaveable { mutableStateOf(false) }
     var editingDomain by remember { mutableStateOf<DomainEntity?>(null) }
     var editingTemplate by remember { mutableStateOf<TaskTemplateEntity?>(null) }
+    var editingTag by remember { mutableStateOf<TagEntity?>(null) }
     val expandedDomains = remember { mutableStateOf(setOf<String>()) }
     // D2 — Full-text search on template titles (parity with desktop LibraryPicker)
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -273,6 +278,18 @@ fun LibraryScreen(
                                 Text("›", color = SubtleWhite, fontSize = 18.sp)
                             }
                         }
+                    }
+                }
+
+                // Tags section — Story 22-2 / Sprint 20 (gated FEATURE_PROJECTS via runtime check
+                // commented out for V1 : section visible toujours, useful for Library + projects).
+                if (!isSearching) {
+                    item(key = "tags_section") {
+                        TagsSection(
+                            tags = state.tags,
+                            onAddTag = { showAddTagDialog = true },
+                            onEditTag = { editingTag = it },
+                        )
                     }
                 }
 
@@ -509,6 +526,32 @@ fun LibraryScreen(
             },
             templateCount = templateCount,
             onDismiss = { editingDomain = null }
+        )
+    }
+
+    // Story 22-2 / Sprint 20 — Tag dialogs
+    if (showAddTagDialog) {
+        TagDialog(
+            initial = null,
+            onConfirm = { name, color ->
+                viewModel.addTag(name, color)
+                showAddTagDialog = false
+            },
+            onDismiss = { showAddTagDialog = false }
+        )
+    }
+    editingTag?.let { tag ->
+        TagDialog(
+            initial = tag,
+            onConfirm = { name, color ->
+                viewModel.updateTag(tag.id, name, color)
+                editingTag = null
+            },
+            onDelete = {
+                viewModel.deleteTag(tag.id)
+                editingTag = null
+            },
+            onDismiss = { editingTag = null }
         )
     }
 }
@@ -806,4 +849,174 @@ private fun TemplateDialog(
             dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Annuler") } }
         ) { DatePicker(state = datePickerState) }
     }
+}
+
+// ── Story 22-2 / Sprint 20 — Tags section + dialog ─────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TagsSection(
+    tags: List<TagEntity>,
+    onAddTag: () -> Unit,
+    onEditTag: (TagEntity) -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        color = Color.Black.copy(alpha = 0.50f),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Text("🏷  Mes Tags", color = TextWhite, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text("${tags.size}", color = SubtleWhite, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(8.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                tags.forEach { tag ->
+                    val tagColor = remember(tag.color) {
+                        runCatching { Color(tag.color.toColorInt()) }.getOrDefault(Color.Gray)
+                    }
+                    Surface(
+                        modifier = Modifier.clickable { onEditTag(tag) },
+                        color = tagColor,
+                        shape = RoundedCornerShape(10.dp),
+                    ) {
+                        Text(
+                            text = tag.name,
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+                // "+ Tag" button — dashed style
+                Surface(
+                    modifier = Modifier.clickable { onAddTag() },
+                    color = Color.Transparent,
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.4f)),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Ajouter un tag", tint = SubtleWhite, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Tag", color = SubtleWhite, fontSize = 12.sp)
+                    }
+                }
+            }
+            if (tags.isEmpty()) {
+                Text(
+                    "Crée des tags pour étiqueter tes projets et templates.",
+                    color = SubtleWhite,
+                    fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TagDialog(
+    initial: TagEntity?,
+    onConfirm: (name: String, color: String) -> Unit,
+    onDismiss: () -> Unit,
+    onDelete: (() -> Unit)? = null,
+) {
+    var name by remember { mutableStateOf(initial?.name ?: "") }
+    var selectedColor by remember {
+        mutableStateOf(initial?.color ?: domainColorPalette.first())
+    }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            containerColor = Color(0xFF1A1A1A),
+            title = { Text("Supprimer le tag ?", color = TextWhite) },
+            text = { Text("Les projets/templates ayant ce tag conservent la référence côté serveur jusqu'à leur prochain edit.", color = SubtleWhite) },
+            confirmButton = {
+                TextButton(onClick = { onDelete?.invoke() }) {
+                    Text("Supprimer", color = TomatoRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) { Text("Annuler", color = SubtleWhite) }
+            }
+        )
+        return
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Color(0xFF1A1A1A),
+        title = { Text(if (initial == null) "Nouveau tag" else "Modifier le tag", color = TextWhite) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nom *", color = SubtleWhite) },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = TomatoRed,
+                        unfocusedBorderColor = GlassWhite,
+                        focusedContainerColor = Color.Black.copy(alpha = 0.6f),
+                        unfocusedContainerColor = Color.Black.copy(alpha = 0.6f),
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                        cursorColor = TomatoRed
+                    ),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text("Couleur", color = SubtleWhite, fontSize = 13.sp)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    domainColorPalette.chunked(5).forEach { rowColors ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            rowColors.forEach { hex ->
+                                val c = remember(hex) { Color(hex.toColorInt()) }
+                                val isSelected = hex == selectedColor
+                                Box(
+                                    modifier = Modifier
+                                        .size(32.dp)
+                                        .background(c, CircleShape)
+                                        .then(
+                                            if (isSelected) Modifier.border(2.dp, Color.White, CircleShape) else Modifier
+                                        )
+                                        .clickable { selectedColor = hex }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { if (name.isNotBlank()) onConfirm(name.trim(), selectedColor) }) {
+                Text(if (initial == null) "Ajouter" else "Enregistrer", color = TomatoRed)
+            }
+        },
+        dismissButton = {
+            Row {
+                if (onDelete != null) {
+                    TextButton(onClick = { showDeleteConfirm = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = null, tint = TomatoRed, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Supprimer", color = TomatoRed)
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text("Annuler", color = SubtleWhite) }
+            }
+        }
+    )
 }
