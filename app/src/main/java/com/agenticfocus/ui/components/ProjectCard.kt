@@ -56,6 +56,7 @@ fun ProjectCard(
     onClick: () -> Unit,
     onLongPress: () -> Unit,
     tags: List<TagEntity> = emptyList(),  // Story 22-2c / Sprint 20 — all tags for resolving tagIds
+    onOpenTasksSheet: (() -> Unit)? = null,  // Story 22-7 / Sprint 20 — ProjectTasksSheet trigger
     modifier: Modifier = Modifier,
 ) {
     val domain = domains.find { it.id == project.domainId }
@@ -97,13 +98,28 @@ fun ProjectCard(
                     .padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = project.name,
-                    color = TextWhite,
-                    fontSize = 15.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(
+                        text = project.name,
+                        color = TextWhite,
+                        fontSize = 15.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    // Story 22-7 / Sprint 20 — icône d'ouverture ProjectTasksSheet (📝 inline tasks)
+                    if (onOpenTasksSheet != null) {
+                        androidx.compose.material3.IconButton(
+                            onClick = { onOpenTasksSheet() },
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Text(
+                                text = "📝",
+                                fontSize = 14.sp,
+                            )
+                        }
+                    }
+                }
                 // Footer ligne 1 — domaine + target date
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Text(

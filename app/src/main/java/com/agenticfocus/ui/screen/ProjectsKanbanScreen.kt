@@ -79,6 +79,7 @@ fun ProjectsKanbanScreen(
     onOpenProject: (String) -> Unit,
     onCreateProject: () -> Unit,
     onEditProject: (ProjectEntity) -> Unit,
+    onOpenTasksSheet: ((ProjectEntity) -> Unit)? = null,  // Story 22-7 / Sprint 20
     contentPadding: PaddingValues = PaddingValues(),
 ) {
     val state by projectVM.state.collectAsStateWithLifecycle()
@@ -232,6 +233,7 @@ fun ProjectsKanbanScreen(
                     tags = libraryState.tags,
                     wipLimit = state.wipLimitByStatus[status] ?: 0,
                     onOpenProject = onOpenProject,
+                    onOpenTasksSheet = onOpenTasksSheet,
                     onLongPress = { p -> actionsForProject = p }
                 )
             }
@@ -358,6 +360,7 @@ private fun KanbanColumn(
     tags: List<com.agenticfocus.data.entity.TagEntity>,  // Story 22-2c / Sprint 20
     wipLimit: Int,  // 0 = illimité (pas de warning)
     onOpenProject: (String) -> Unit,
+    onOpenTasksSheet: ((ProjectEntity) -> Unit)? = null,  // Story 22-7 / Sprint 20
     onLongPress: (ProjectEntity) -> Unit,
 ) {
     val hasLimit = wipLimit > 0
@@ -398,7 +401,8 @@ private fun KanbanColumn(
                         domains = domains,
                         tags = tags,
                         onClick = { onOpenProject(p.id) },
-                        onLongPress = { onLongPress(p) }
+                        onLongPress = { onLongPress(p) },
+                        onOpenTasksSheet = onOpenTasksSheet?.let { handler -> { handler(p) } },
                     )
                 }
             }

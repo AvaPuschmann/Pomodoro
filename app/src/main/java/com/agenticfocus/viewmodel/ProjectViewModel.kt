@@ -226,6 +226,41 @@ class ProjectViewModel(application: Application) : AndroidViewModel(application)
         return "%04d-%02d-%02d".format(now.year, now.monthValue, now.dayOfMonth)
     }
 
+    // ── Story 22-7 / Sprint 20 — Task mutations from ProjectTasksSheet ──────
+    // Direct DAO mutations + SyncEngine push, scope-independent (works pour tasks
+    // de n'importe quel projet, n'importe quelle date).
+
+    fun toggleTaskCompletion(taskId: String) {
+        viewModelScope.launch {
+            runCatching {
+                val task = db.dayTaskDao().getById(taskId) ?: return@launch
+                val updated = task.copy(
+                    isCompleted = !task.isCompleted,
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.dayTaskDao().upsert(updated)
+                try { com.agenticfocus.data.sync.SyncEngine.upsertDayTask(updated) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    fun updateTaskPlannedPomodoros(taskId: String, delta: Int) {
+        viewModelScope.launch {
+            runCatching {
+                val task = db.dayTaskDao().getById(taskId) ?: return@launch
+                val min = task.completedPomodoros.coerceAtLeast(0)
+                val newPlanned = (task.plannedPomodoros + delta).coerceIn(min, 99)
+                if (newPlanned == task.plannedPomodoros) return@launch
+                val updated = task.copy(
+                    plannedPomodoros = newPlanned,
+                    updatedAt = System.currentTimeMillis()
+                )
+                db.dayTaskDao().upsert(updated)
+                try { com.agenticfocus.data.sync.SyncEngine.upsertDayTask(updated) } catch (_: Exception) {}
+            }
+        }
+    }
+
     // ── Filters / sort / preferences ───────────────────────────────
     fun setSortOrder(order: SortOrder) {
         _state.update { it.copy(sortOrder = order) }

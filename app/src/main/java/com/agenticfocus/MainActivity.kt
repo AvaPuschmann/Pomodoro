@@ -219,6 +219,8 @@ class MainActivity : ComponentActivity() {
                             // Story 18-5 — state pour ProjectFormSheet (création ou édition).
                             var projectFormVisible by remember { mutableStateOf(false) }
                             var projectFormEditing by remember { mutableStateOf<ProjectEntity?>(null) }
+                            // Story 22-7 / Sprint 20 — ProjectTasksSheet trigger state
+                            var tasksSheetForProject by remember { mutableStateOf<ProjectEntity?>(null) }
                             // Story 18-4 — state pour ProjectDetailScreen (id = visible si non null)
                             var openedProjectId by rememberSaveable { mutableStateOf<String?>(null) }
                             // Story 18-7 — state pour AddTaskForm pre-fill depuis ProjectDetailScreen
@@ -432,7 +434,29 @@ class MainActivity : ComponentActivity() {
                                                             projectFormEditing = p
                                                             projectFormVisible = true
                                                         },
+                                                        onOpenTasksSheet = { p -> tasksSheetForProject = p },  // Story 22-7
                                                         contentPadding = innerPadding
+                                                    )
+                                                }
+                                                // Story 22-7 / Sprint 20 — ProjectTasksSheet overlay
+                                                tasksSheetForProject?.let { project ->
+                                                    com.agenticfocus.ui.screen.ProjectTasksSheet(
+                                                        project = project,
+                                                        projectVM = projectVM,
+                                                        dayPlannerVM = dayPlannerVM,
+                                                        onAddTask = {
+                                                            addTaskForProjectId = project.id
+                                                            tasksSheetForProject = null
+                                                        },
+                                                        onEditTask = { _ ->
+                                                            // V1 mobile : édition simple = passer à ProjectDetailScreen
+                                                            // qui contient sort + edit complet par tâche.
+                                                            // Future : EditTaskForm directe ouverte ici.
+                                                            openedProjectId = project.id
+                                                            tasksSheetForProject = null
+                                                        },
+                                                        onDismiss = { tasksSheetForProject = null },
+                                                        onNavigateToTimer = { selectedTab = Tab.TIMER },
                                                     )
                                                 }
                                                 // Story 18-5 — ProjectFormSheet overlay (création ou édition)
