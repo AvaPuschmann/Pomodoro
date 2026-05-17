@@ -117,25 +117,35 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
                     }
                 }
 
-                // Auto-increment completed pomodoros
+                // Auto-increment completed pomodoros — Story 23-10 / Sprint 21 robust DB update.
+                // Bug fixé : l'ancien code mappait sur _state.value.tasks qui ne contient QUE les
+                // tasks de la date affichée. Si la task active appartient à un autre jour ou au
+                // backlog, l'increment ne se faisait jamais → completedPomodoros restait bloqué
+                // → isCompleted jamais passé à true → cercle orange persistant.
+                // Fix : update directement en DB via dao + push SyncEngine. Le observe Flow
+                // de observeTasksForDate(selectedDate) refresh le state si applicable.
                 if (activeId != null && timerState.completedPomodoros > previousCompleted) {
                     val endTime = System.currentTimeMillis()
                     val startTime = endTime - (25 * 60 * 1000L)
 
-                    _state.update { s ->
-                        s.copy(tasks = s.tasks.map { task ->
-                            if (task.id == activeId) {
-                                val newCompleted = task.completedPomodoros + 1
-                                val allDone = task.plannedPomodoros > 0 && newCompleted >= task.plannedPomodoros
-                                task.copy(
-                                    completedPomodoros = newCompleted,
-                                    isCompleted = task.isCompleted || allDone
-                                )
-                            } else task
-                        })
+                    viewModelScope.launch(Dispatchers.IO) {
+                        val dao = AppDatabase.getInstance(getApplication()).dayTaskDao()
+                        val task = dao.getById(activeId)
+                        if (task != null) {
+                            val newCompleted = task.completedPomodoros + 1
+                            val allDone = task.plannedPomodoros > 0 && newCompleted >= task.plannedPomodoros
+                            val updated = task.copy(
+                                completedPomodoros = newCompleted,
+                                isCompleted = task.isCompleted || allDone,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                            dao.upsert(updated)
+                            try { com.agenticfocus.data.sync.SyncEngine.upsertDayTask(updated) } catch (_: Exception) {}
+                            Log.d("DayPlannerVM", "Auto-incremented pomodoro for task $activeId : $newCompleted/${task.plannedPomodoros}, isCompleted=${updated.isCompleted}")
+                        } else {
+                            Log.w("DayPlannerVM", "Active task $activeId not found in DB — increment skipped")
+                        }
                     }
-
-                    persistAll()
 
                     viewModelScope.launch {
                         repository.recordSession(

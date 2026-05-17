@@ -1,5 +1,6 @@
 package com.agenticfocus.data.repository
 
+import android.util.Log
 import com.agenticfocus.data.dao.DomainDao
 import com.agenticfocus.data.dao.TagDao
 import com.agenticfocus.data.dao.TaskTemplateDao
@@ -8,7 +9,9 @@ import com.agenticfocus.data.entity.TagEntity
 import com.agenticfocus.data.entity.TaskTemplateEntity
 import com.agenticfocus.data.sync.SyncEngine
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.onStart
 import java.util.UUID
 
 class LibraryRepository(
@@ -19,9 +22,33 @@ class LibraryRepository(
     private val tagDao: TagDao? = null,
 ) {
 
+    // Story 23-9 / Sprint 21 — defensive Flow patterns :
+    // - .onStart(emit(emptyList())) garantit que combine() reçoit immédiatement une 1ère
+    //   valeur, évitant le state stuck à initialValue si Room DAO lookup est lent au boot
+    // - .catch { emit(emptyList()) } swallow exceptions (ex: table absente, migration foirée)
+    //   pour ne PAS bloquer le state flow ; logge l'erreur pour debug futur
     val domains: Flow<List<DomainEntity>> = domainDao.observeAll()
+        .onStart { emit(emptyList()) }
+        .catch { e ->
+            Log.e(TAG, "domains flow failed", e)
+            emit(emptyList())
+        }
+
     val templates: Flow<List<TaskTemplateEntity>> = templateDao.observeAll()
-    val tags: Flow<List<TagEntity>> = tagDao?.observeAll() ?: flowOf(emptyList())
+        .onStart { emit(emptyList()) }
+        .catch { e ->
+            Log.e(TAG, "templates flow failed", e)
+            emit(emptyList())
+        }
+
+    val tags: Flow<List<TagEntity>> = (tagDao?.observeAll() ?: flowOf(emptyList()))
+        .onStart { emit(emptyList()) }
+        .catch { e ->
+            Log.e(TAG, "tags flow failed (probably migration v18 not applied)", e)
+            emit(emptyList())
+        }
+
+    companion object { private const val TAG = "LibraryRepository" }
 
     suspend fun domainCount(): Int = domainDao.count()
 

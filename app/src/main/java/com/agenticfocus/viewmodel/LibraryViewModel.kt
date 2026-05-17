@@ -11,6 +11,7 @@ import com.agenticfocus.data.repository.LibraryRepository
 import com.agenticfocus.data.sync.SyncEngine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -38,6 +39,12 @@ class LibraryViewModel(application: Application) : AndroidViewModel(application)
         val validTemplates = templates.filter { it.domainId in domainIds }
         val byDomain = validTemplates.groupBy { it.domainId }
         LibraryState(domains = domains, templatesByDomain = byDomain, tags = tags)
+    }.catch { e ->
+        // Story 23-9 / Sprint 21 — defense in depth : si combine throw (rare car les
+        // sources sont catch déjà côté Repository), on émet LibraryState vide plutôt
+        // que freeze le UI. Log pour debug.
+        android.util.Log.e("LibraryViewModel", "combine state flow failed", e)
+        emit(LibraryState())
     }.stateIn(
         scope = viewModelScope,
         // Eagerly: keep the state populated as long as the VM is alive.
