@@ -13,6 +13,47 @@ val localProps = Properties()
 val localPropsFile = rootProject.file("local.properties")
 if (localPropsFile.exists()) localProps.load(localPropsFile.inputStream())
 
+// Fail-fast guard : refuse de build si les credentials Supabase manquent.
+// Hot-fix 2026-05-23 — bug critique Philippe : local.properties avait perdu
+// SUPABASE_URL et SUPABASE_ANON_KEY (perdu silencieusement lors d'un reset
+// IDE), build a passé avec valeurs vides → supabase-kt a fallback sur
+// https://localhost → ECONNREFUSED → mapping français "Impossible de se
+// connecter. Vérifiez votre connexion." trompeur. Cf. local.properties.example.
+// Skip pour les tâches Gradle qui n'ont pas besoin du build (sync, clean, etc.).
+val isAssembleTask = gradle.startParameter.taskNames.any { name ->
+    name.contains("assemble", ignoreCase = true) ||
+    name.contains("install", ignoreCase = true) ||
+    name.contains("bundle", ignoreCase = true)
+}
+if (isAssembleTask) {
+    val supabaseUrl = localProps["SUPABASE_URL"]?.toString().orEmpty()
+    val supabaseKey = localProps["SUPABASE_ANON_KEY"]?.toString().orEmpty()
+    if (supabaseUrl.isBlank() || supabaseKey.isBlank()) {
+        throw GradleException(
+            """
+
+            ❌ Build refused: missing Supabase credentials in local.properties.
+
+            Expected variables (see local.properties.example) :
+                SUPABASE_URL=https://<project>.supabase.co
+                SUPABASE_ANON_KEY=eyJ...
+
+            Current values :
+                SUPABASE_URL     = "${supabaseUrl.ifBlank { "<empty>" }}"
+                SUPABASE_ANON_KEY = "${if (supabaseKey.isBlank()) "<empty>" else supabaseKey.take(12) + "..."}"
+
+            Without these, supabase-kt falls back to https://localhost and
+            all auth/sync calls fail with ECONNREFUSED + the misleading
+            "Impossible de se connecter. Vérifiez votre connexion." message
+            on the login screen.
+
+            Fix : edit local.properties (NOT local.properties.example) and
+            paste the values from Supabase Studio → Project Settings → API.
+            """.trimIndent()
+        )
+    }
+}
+
 android {
     namespace = "com.agenticfocus"
     compileSdk = 35
@@ -90,6 +131,9 @@ dependencies {
 
     // Security — EncryptedSharedPreferences
     implementation(libs.security.crypto)
+
+    // WorkManager — Story 24-6 Sprint 22 Epic 24 (notification quotidienne Bilan du Jour)
+    implementation(libs.androidx.work.runtime.ktx)
 
     testImplementation(libs.junit)
     testImplementation(libs.turbine)
