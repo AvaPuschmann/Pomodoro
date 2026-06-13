@@ -79,3 +79,6 @@ fastlane/readme.md
 # OS
 .DS_Store
 Thumbs.db
+
+# Kotlin compiler sessions/caches
+.kotlin/

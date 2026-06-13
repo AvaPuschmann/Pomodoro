@@ -106,6 +106,23 @@ class AppPreferences(context: Context) {
         get() = prefs.getInt(KEY_WIA_THRESH_ORANGE, 45)
         set(value) { prefs.edit().putInt(KEY_WIA_THRESH_ORANGE, value).apply() }
 
+    // ── Story 24-6 Sprint 22 Epic 24 — Daily reflection notification preferences ─
+
+    /** Enable daily reflection reminder notification. Default: true (user can opt-out via Settings). */
+    var reflectionNotifEnabled: Boolean
+        get() = prefs.getBoolean(KEY_REFLECTION_NOTIF_ENABLED, true)
+        set(value) { prefs.edit().putBoolean(KEY_REFLECTION_NOTIF_ENABLED, value).apply() }
+
+    /** Hour (0-23) of the daily reflection reminder. Default: 21 (9 PM, post-dinner ritual time per UX Sally). */
+    var reflectionNotifHour: Int
+        get() = prefs.getInt(KEY_REFLECTION_NOTIF_HOUR, 21)
+        set(value) { prefs.edit().putInt(KEY_REFLECTION_NOTIF_HOUR, value).apply() }
+
+    /** Minute (0-59) of the daily reflection reminder. Default: 0 (full hour). */
+    var reflectionNotifMinute: Int
+        get() = prefs.getInt(KEY_REFLECTION_NOTIF_MINUTE, 0)
+        set(value) { prefs.edit().putInt(KEY_REFLECTION_NOTIF_MINUTE, value).apply() }
+
     companion object {
         private const val PREFS_NAME          = "app_preferences"
         private const val KEY_AUTO_CHAIN      = "auto_chain"
@@ -127,5 +144,8 @@ class AppPreferences(context: Context) {
         private const val KEY_WIA_THRESH_GREEN  = "wia_thresh_green"
         private const val KEY_WIA_THRESH_YELLOW = "wia_thresh_yellow"
         private const val KEY_WIA_THRESH_ORANGE = "wia_thresh_orange"
+        private const val KEY_REFLECTION_NOTIF_ENABLED = "reflection_notif_enabled"
+        private const val KEY_REFLECTION_NOTIF_HOUR    = "reflection_notif_hour"
+        private const val KEY_REFLECTION_NOTIF_MINUTE  = "reflection_notif_minute"
     }
 }

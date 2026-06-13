@@ -39,3 +39,26 @@ fun ToggleChip(
 
 fun formatDueDate(dueDate: Long): String =
     SimpleDateFormat("dd MMM yyyy", Locale.FRENCH).format(Date(dueDate))
+
+/**
+ * Format a periodKey (YYYY-MM-DD) into a French human-friendly date string.
+ * Story 24-2 Sprint 22 Epic 24 — used as hero title on DailyReflectionScreen.
+ *
+ * Examples :
+ * - "2026-05-21" → "Jeudi 21 mai 2026"
+ * - "2026-12-31" → "Jeudi 31 décembre 2026"
+ *
+ * @return Capitalized French formatted date, or the raw periodKey if parsing fails (defensive).
+ */
+fun formatFrenchDate(periodKey: String): String {
+    return try {
+        val parser = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val date = parser.parse(periodKey) ?: return periodKey
+        val formatter = SimpleDateFormat("EEEE d MMMM yyyy", Locale.FRENCH)
+        val formatted = formatter.format(date)
+        // Capitalize first letter (French locale starts day name lowercase: "jeudi 21 mai 2026")
+        formatted.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.FRENCH) else it.toString() }
+    } catch (_: Exception) {
+        periodKey
+    }
+}

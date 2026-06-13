@@ -1,6 +1,7 @@
 package com.agenticfocus
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -73,7 +74,9 @@ import com.agenticfocus.data.supabase.SupabaseClientProvider
 import com.agenticfocus.data.sync.RealtimeSyncManager
 import com.agenticfocus.data.sync.SyncStatusManager
 import kotlinx.coroutines.flow.first
+import com.agenticfocus.ui.screen.DailyReflectionScreen
 import com.agenticfocus.ui.screen.DayPlannerScreen
+import com.agenticfocus.ui.screen.ReflectionHistoryScreen
 import com.agenticfocus.ui.screen.LibraryScreen
 import com.agenticfocus.ui.screen.LoginScreen
 import com.agenticfocus.ui.screen.PomodoroScreen
@@ -112,6 +115,13 @@ class MainActivity : ComponentActivity() {
     private var routineRepo: RoutineRepository? = null
     private var authenticatedUserId: String? = null
 
+    companion object {
+        // Story 24-6 Sprint 22 Epic 24 — Deep link trigger from notification.
+        // Set by onCreate/onNewIntent quand intent contient EXTRA_OPEN_DAILY_REFLECTION=true.
+        // Consommé par le Composable racine via LaunchedEffect → set showDailyReflection=true.
+        val deepLinkOpenReflection = androidx.compose.runtime.mutableStateOf(false)
+    }
+
     override fun onResume() {
         super.onResume()
         val userId = authenticatedUserId ?: return
@@ -121,6 +131,24 @@ class MainActivity : ComponentActivity() {
         // foreground for stale data to reconcile.
         RealtimeSyncManager.triggerPull(userId)
         lifecycleScope.launch { repo.injectRoutinesForToday(userId) }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        checkDailyReflectionDeepLink(intent)
+    }
+
+    private fun checkDailyReflectionDeepLink(intent: Intent?) {
+        if (intent?.getBooleanExtra(
+                com.agenticfocus.worker.DailyReflectionReminderWorker.EXTRA_OPEN_DAILY_REFLECTION,
+                false,
+            ) == true
+        ) {
+            deepLinkOpenReflection.value = true
+            // Clear extra so config changes don't re-trigger
+            intent.removeExtra(com.agenticfocus.worker.DailyReflectionReminderWorker.EXTRA_OPEN_DAILY_REFLECTION)
+        }
     }
 
     @OptIn(ExperimentalMaterial3Api::class)
@@ -134,6 +162,8 @@ class MainActivity : ComponentActivity() {
         splash.setKeepOnScreenCondition {
             !SupabaseClientProvider.isReady.value || !StartupState.isAuthChecked
         }
+        // Story 24-6 — check deep link from notification at app cold start
+        checkDailyReflectionDeepLink(intent)
         enableEdgeToEdge()
         setContent {
             AgenticFocusTheme {
@@ -225,6 +255,23 @@ class MainActivity : ComponentActivity() {
                             var openedProjectId by rememberSaveable { mutableStateOf<String?>(null) }
                             // Story 18-7 — state pour AddTaskForm pre-fill depuis ProjectDetailScreen
                             var addTaskForProjectId by remember { mutableStateOf<String?>(null) }
+                            // Story 24-2 / Sprint 22 / Epic 24 — état pour DailyReflectionScreen overlay
+                            var showDailyReflection by rememberSaveable { mutableStateOf(false) }
+                            // Story 24-4 / Sprint 22 / Epic 24 — état pour ReflectionHistoryScreen overlay (au-dessus du DailyReflectionScreen)
+                            var showReflectionHistory by rememberSaveable { mutableStateOf(false) }
+                            // Story 24-3 / Sprint 22 / Epic 24 — periodKey courant du DailyReflectionScreen (today par défaut, change quand on ouvre un past via history)
+                            var reflectionPeriodKey by rememberSaveable { mutableStateOf(java.time.LocalDate.now().toString()) }
+
+                            // Story 24-6 — Consume deep link from notification (set by onCreate/onNewIntent)
+                            val deepLinkRequest by deepLinkOpenReflection
+                            LaunchedEffect(deepLinkRequest) {
+                                if (deepLinkRequest) {
+                                    reflectionPeriodKey = java.time.LocalDate.now().toString()
+                                    showReflectionHistory = false
+                                    showDailyReflection = true
+                                    deepLinkOpenReflection.value = false  // consume
+                                }
+                            }
 
                             // D3 — Wire RoutineViewModel to current user (gates auto-create on firstPullCompleted)
                             LaunchedEffect(userId) {
@@ -337,8 +384,9 @@ class MainActivity : ComponentActivity() {
                                 topBar = {
                                     // Story 18-1bis — TopAppBar globale avec hamburger ≡ seul (drawer slide-in).
                                     // Title vide pour éviter superposition avec headers per-écran (date Day
-                                    // Planner, "Ma Bibliothèque" Library, etc.). Cachée si overlay Settings.
-                                    if (!showSettings) {
+                                    // Planner, "Ma Bibliothèque" Library, etc.). Cachée si overlay Settings/Bilan/History.
+                                    val hideGlobalChrome = showSettings || showDailyReflection || showReflectionHistory
+                                    if (!hideGlobalChrome) {
                                         TopAppBar(
                                             title = {},  // intentionnel — chaque écran a son propre header
                                             navigationIcon = {
@@ -348,6 +396,24 @@ class MainActivity : ComponentActivity() {
                                                     Icon(Icons.Default.Menu, contentDescription = "Menu")
                                                 }
                                             },
+                                            actions = {
+                                                // Story 24-5 / Sprint 22 / Epic 24 — Point d'entrée DailyReflectionScreen.
+                                                // Visible sur PLANNER + TIMER (feedback Philippe 2026-05-21 : rituel
+                                                // déclenchable aussi depuis Timer car écran principal d'usage).
+                                                if (selectedTab == Tab.PLANNER || selectedTab == Tab.TIMER) {
+                                                    IconButton(onClick = {
+                                                        // Ouvre le bilan du jour NAVIGUÉ dans le planner (selectedDate),
+                                                        // pas forcément aujourd'hui, pour le journaling rétroactif.
+                                                        reflectionPeriodKey = dayPlannerVM.selectedDate.value.toString()
+                                                        showDailyReflection = true
+                                                    }) {
+                                                        Icon(
+                                                            Icons.Filled.MenuBook,
+                                                            contentDescription = "Bilan du jour",
+                                                        )
+                                                    }
+                                                }
+                                            },
                                             colors = TopAppBarDefaults.topAppBarColors(
                                                 containerColor = Color.Transparent
                                             )
@@ -355,8 +421,9 @@ class MainActivity : ComponentActivity() {
                                     }
                                 },
                                 bottomBar = {
-                                    // Cache le bottom nav si l'overlay Settings est actif (UX cohérence)
-                                    if (!showSettings) {
+                                    // Cache le bottom nav si overlay actif (Settings, DailyReflection, History)
+                                    val hideGlobalChrome = showSettings || showDailyReflection || showReflectionHistory
+                                    if (!hideGlobalChrome) {
                                         NavigationBar {
                                             visibleTabs.forEach { tab ->
                                                 NavigationBarItem(
@@ -370,7 +437,30 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             ) { innerPadding ->
-                                if (showSettings) {
+                                if (showReflectionHistory) {
+                                    // Story 24-4 / Sprint 22 / Epic 24 — ReflectionHistoryScreen overlay au-dessus de DailyReflectionScreen
+                                    ReflectionHistoryScreen(
+                                        userId = userId,
+                                        onBack = { showReflectionHistory = false },
+                                        onOpenReflection = { periodKey ->
+                                            reflectionPeriodKey = periodKey
+                                            showReflectionHistory = false
+                                            // Note : showDailyReflection stays true (déjà visible en arrière-plan ; periodKey change → LaunchedEffect du Screen recharge)
+                                        },
+                                    )
+                                } else if (showDailyReflection) {
+                                    // Story 24-2 / Sprint 22 / Epic 24 — DailyReflectionScreen overlay plein écran
+                                    DailyReflectionScreen(
+                                        userId = userId,
+                                        periodKey = reflectionPeriodKey,
+                                        onBack = {
+                                            showDailyReflection = false
+                                            // Reset periodKey to today on close (next open will start fresh)
+                                            reflectionPeriodKey = java.time.LocalDate.now().toString()
+                                        },
+                                        onOpenHistory = { showReflectionHistory = true },
+                                    )
+                                } else if (showSettings) {
                                     // Story 18-1 — Settings overlay full-screen avec callback close
                                     SettingsScreen(
                                         onSignOut = { authVM.signOut() },

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import com.agenticfocus.data.dao.SyncQueueDao
+import com.agenticfocus.data.entity.DailyReflectionEntity
 import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.GoalEntity
@@ -173,6 +174,29 @@ object SyncEngine {
             }
         } else {
             enqueue("goals", id, "DELETE", "{}")
+        }
+    }
+
+    // ── DailyReflection (Story 24-1 Sprint 22 Epic 24) ────────────────────────
+
+    suspend fun upsertDailyReflection(entity: DailyReflectionEntity) {
+        val dto = entity.toDto()
+        if (isConnected()) {
+            if (!tryUpsert("daily_reflections") { SupabaseClientProvider.client.from("daily_reflections").upsert(dto) }) {
+                enqueue("daily_reflections", entity.id, "UPSERT", Json.encodeToString(dto))
+            }
+        } else {
+            enqueue("daily_reflections", entity.id, "UPSERT", Json.encodeToString(dto))
+        }
+    }
+
+    suspend fun deleteDailyReflection(id: String) {
+        if (isConnected()) {
+            if (!tryDelete("daily_reflections", id)) {
+                enqueue("daily_reflections", id, "DELETE", "{}")
+            }
+        } else {
+            enqueue("daily_reflections", id, "DELETE", "{}")
         }
     }
 
@@ -365,6 +389,10 @@ object SyncEngine {
                 "tags" -> {
                     val dto = Json.decodeFromString<com.agenticfocus.data.supabase.dto.TagDto>(entry.payload)
                     SupabaseClientProvider.client.from("tags").upsert(dto)
+                }
+                "daily_reflections" -> {
+                    val dto = Json.decodeFromString<com.agenticfocus.data.supabase.dto.DailyReflectionDto>(entry.payload)
+                    SupabaseClientProvider.client.from("daily_reflections").upsert(dto)
                 }
                 else -> { /* unknown table — discard */ }
             }

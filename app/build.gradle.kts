@@ -135,6 +135,9 @@ dependencies {
     // WorkManager — Story 24-6 Sprint 22 Epic 24 (notification quotidienne Bilan du Jour)
     implementation(libs.androidx.work.runtime.ktx)
 
+    // Markwon — rendu Markdown (note de tâche, éditeur Agrandir). Lib Android stable (Maven Central).
+    implementation(libs.markwon.core)
+
     testImplementation(libs.junit)
     testImplementation(libs.turbine)
     testImplementation(libs.kotlinx.coroutines.test)

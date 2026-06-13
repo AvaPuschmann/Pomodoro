@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import com.agenticfocus.BuildConfig
 import com.agenticfocus.data.db.AppDatabase
 import com.agenticfocus.data.supabase.SupabaseClientProvider
+import com.agenticfocus.data.supabase.dto.DailyReflectionDto
 import com.agenticfocus.data.supabase.dto.DayTaskDto
 import com.agenticfocus.data.supabase.dto.DomainDto
 import com.agenticfocus.data.supabase.dto.GoalDto
@@ -119,6 +120,21 @@ object RealtimeSyncManager {
                 subscribeToTable<RoutineItemDto>(ch, "routine_items", userId, scope,
                     onUpsert = { dto -> db?.routineDao()?.upsertRoutineItem(dto.toEntity()) },
                     onDeleteById = { id -> db?.routineDao()?.deleteRoutineItem(id) }
+                )
+                // Story 24-1 Sprint 22 Epic 24 — daily_reflections (Bilan du Jour)
+                // Party Mode 2026-05-21 décision Q2 : applyRemoteUpsert avec getByPeriodKey BEFORE upsert
+                // pour gérer collision index unique (user_id, period_key) avec id différents (race cross-device).
+                subscribeToTable<DailyReflectionDto>(ch, "daily_reflections", userId, scope,
+                    onUpsert = { dto ->
+                        val dao = db?.dailyReflectionDao() ?: return@subscribeToTable
+                        val entity = dto.toEntity()
+                        val existing = dao.getByPeriodKey(entity.userId, entity.periodKey)
+                        if (existing != null && existing.id != entity.id) {
+                            dao.deleteById(existing.id)
+                        }
+                        dao.upsertFromRemote(entity)
+                    },
+                    onDeleteById = { id -> db?.dailyReflectionDao()?.deleteById(id) }
                 )
                 // Mode Projet — Story 17-9. Gated FEATURE_PROJECTS (16-1).
                 // Listener registered BEFORE channel.subscribe() per supabase-kt pitfall #4.
@@ -242,23 +258,37 @@ object RealtimeSyncManager {
             // an intermediate empty state between deleteAll() and the inserts (was
             // causing Library tab + EditTaskForm domain dropdown to flash empty for
             // hundreds of ms after every pullSync — every 5 min, onResume, reconnect).
+            // Bug "Library souvent vide" 2026-05-27 : skip clear-then-replace si Supabase
+            // renvoie une liste vide → évite data loss permanent si fetch retourne 0 lignes
+            // (RLS misfire, session juste restaurée, hiccup serveur). Parité avec
+            // PullSync.ts desktop ligne 49 (if domains.length > 0). Suppression utilisateur
+            // explicite reste géré via Realtime onDelete (delete par id, pas wipe global).
             val tDomains = System.currentTimeMillis()
             val domains = fetchAllUserRows<DomainDto>("domains", userId)
-            db.withTransaction {
-                db.domainDao().deleteAll()
-                domains.forEach { db.domainDao().insert(it.toEntity()) }
+            if (domains.isNotEmpty()) {
+                db.withTransaction {
+                    db.domainDao().deleteAll()
+                    domains.forEach { db.domainDao().insert(it.toEntity()) }
+                }
+                Log.d(TAG, "Pulled ${domains.size} domains in ${System.currentTimeMillis() - tDomains}ms")
+            } else {
+                Log.w(TAG, "domains fetch returned 0 rows — skipping clear-then-replace to preserve local data")
             }
-            Log.d(TAG, "Pulled ${domains.size} domains in ${System.currentTimeMillis() - tDomains}ms")
 
             // ── Task templates: clear-then-replace (referential integrity with domains, F5) ─
             // Same withTransaction guarantee as domains (atomic visibility).
+            // Même guard que domains (cf. commentaire ci-dessus) — parité PullSync.ts ligne 61.
             val tTemplates = System.currentTimeMillis()
             val templates = fetchAllUserRows<TaskTemplateDto>("task_templates", userId)
-            db.withTransaction {
-                db.taskTemplateDao().deleteAll()
-                templates.forEach { db.taskTemplateDao().insert(it.toEntity()) }
+            if (templates.isNotEmpty()) {
+                db.withTransaction {
+                    db.taskTemplateDao().deleteAll()
+                    templates.forEach { db.taskTemplateDao().insert(it.toEntity()) }
+                }
+                Log.d(TAG, "Pulled ${templates.size} task_templates in ${System.currentTimeMillis() - tTemplates}ms")
+            } else {
+                Log.w(TAG, "task_templates fetch returned 0 rows — skipping clear-then-replace to preserve local data")
             }
-            Log.d(TAG, "Pulled ${templates.size} task_templates in ${System.currentTimeMillis() - tTemplates}ms")
 
             // ── Pomodoro sessions: upsert-only ─────────────────────────────────
             val tSessions = System.currentTimeMillis()
@@ -277,6 +307,22 @@ object RealtimeSyncManager {
             val goals = fetchAllUserRows<GoalDto>("goals", userId)
             goals.forEach { db.goalDao().upsert(it.toEntity()) }
             Log.d(TAG, "Pulled ${goals.size} goals in ${System.currentTimeMillis() - tGoals}ms")
+
+            // ── Daily reflections: upsert-with-collision-check (Story 24-1 Sprint 22 Epic 24) ─
+            // Party Mode 2026-05-21 décision Q2 : getByPeriodKey AVANT upsert
+            // pour éviter SQLiteConstraintException sur l'index unique (user_id, period_key)
+            // si race cross-device génère un id différent côté serveur.
+            val tReflections = System.currentTimeMillis()
+            val reflections = fetchAllUserRows<DailyReflectionDto>("daily_reflections", userId)
+            for (dto in reflections) {
+                val entity = dto.toEntity()
+                val existing = db.dailyReflectionDao().getByPeriodKey(entity.userId, entity.periodKey)
+                if (existing != null && existing.id != entity.id) {
+                    db.dailyReflectionDao().deleteById(existing.id)
+                }
+                db.dailyReflectionDao().upsertFromRemote(entity)
+            }
+            Log.d(TAG, "Pulled ${reflections.size} daily_reflections in ${System.currentTimeMillis() - tReflections}ms")
 
             // ── Routines: clear-then-replace per id (forces NULL overwrite for
             //    fields that were null on Supabase but non-null locally — pattern
@@ -300,22 +346,31 @@ object RealtimeSyncManager {
             // Story 17-9 / Sprint 17. Must be pulled BEFORE day_tasks so no transient
             // orphan project_id in UI [D28/F7/F-B]. Gated FEATURE_PROJECTS (16-1).
             if (BuildConfig.FEATURE_PROJECTS) {
+                // Même guard data-loss que domains/templates — cf. bug "Library souvent vide" 2026-05-27.
                 val tProjects = System.currentTimeMillis()
                 val projects = fetchAllUserRows<ProjectDto>("projects", userId)
-                db.withTransaction {
-                    db.projectDao().deleteAll()
-                    projects.forEach { db.projectDao().upsert(it.toEntity()) }
+                if (projects.isNotEmpty()) {
+                    db.withTransaction {
+                        db.projectDao().deleteAll()
+                        projects.forEach { db.projectDao().upsert(it.toEntity()) }
+                    }
+                    Log.d(TAG, "Pulled ${projects.size} projects in ${System.currentTimeMillis() - tProjects}ms")
+                } else {
+                    Log.w(TAG, "projects fetch returned 0 rows — skipping clear-then-replace to preserve local data")
                 }
-                Log.d(TAG, "Pulled ${projects.size} projects in ${System.currentTimeMillis() - tProjects}ms")
 
                 // Story 22-2 / Sprint 20 — Pull tags after projects (project.tag_ids reference Tag.id).
                 val tTags = System.currentTimeMillis()
                 val tags = fetchAllUserRows<TagDto>("tags", userId)
-                db.withTransaction {
-                    db.tagDao().deleteAll()
-                    tags.forEach { db.tagDao().upsert(it.toEntity()) }
+                if (tags.isNotEmpty()) {
+                    db.withTransaction {
+                        db.tagDao().deleteAll()
+                        tags.forEach { db.tagDao().upsert(it.toEntity()) }
+                    }
+                    Log.d(TAG, "Pulled ${tags.size} tags in ${System.currentTimeMillis() - tTags}ms")
+                } else {
+                    Log.w(TAG, "tags fetch returned 0 rows — skipping clear-then-replace to preserve local data")
                 }
-                Log.d(TAG, "Pulled ${tags.size} tags in ${System.currentTimeMillis() - tTags}ms")
             }
 
             // ── Day tasks: reconciliation (atomic, sync_queue protected, F1+F2+F3) ─

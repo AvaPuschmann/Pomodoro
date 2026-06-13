@@ -18,6 +18,8 @@ ktor = "2.3.12"
 coroutinesTest = "1.8.1"
 securityCrypto = "1.1.0-alpha06"
 splashscreen = "1.0.1"
+workmanager = "2.9.1"
+markwon = "4.6.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -49,6 +51,8 @@ ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.r
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutinesTest" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workmanager" }
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Story 24-6 Sprint 22 Epic 24 — re-schedule daily reflection reminder after device reboot -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:name=".AgenticFocusApp"
@@ -32,6 +34,16 @@
             android:name=".service.TimerService"
             android:foregroundServiceType="dataSync"
             android:exported="false" />
+
+        <!-- Story 24-6 Sprint 22 Epic 24 — Re-schedule daily reflection reminder after device boot -->
+        <receiver
+            android:name=".receiver.BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
     </application>
 

@@ -33,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -90,6 +91,7 @@ import com.agenticfocus.data.sync.SyncEngine
 import com.agenticfocus.data.sync.SyncStatusManager
 import com.agenticfocus.ui.components.DayTaskRow
 import com.agenticfocus.ui.components.GoalsCard
+import com.agenticfocus.ui.components.NoteEditorDialog
 import com.agenticfocus.ui.theme.GlassWhite
 import com.agenticfocus.ui.theme.SubtleWhite
 import com.agenticfocus.ui.theme.TextWhite
@@ -737,6 +739,7 @@ internal fun AddTaskForm(
         )
 
         // Note (parity with EditTaskForm)
+        var showNoteEditor by remember { mutableStateOf(false) }
         OutlinedTextField(
             value = note,
             onValueChange = { note = it },
@@ -749,8 +752,25 @@ internal fun AddTaskForm(
             ),
             shape = RoundedCornerShape(12.dp),
             minLines = 2,
-            maxLines = 4
+            maxLines = 4,
+            trailingIcon = {
+                IconButton(onClick = { showNoteEditor = true }) {
+                    Icon(
+                        Icons.Filled.OpenInFull,
+                        contentDescription = "Agrandir la note",
+                        tint = SubtleWhite,
+                    )
+                }
+            }
         )
+        if (showNoteEditor) {
+            NoteEditorDialog(
+                value = note,
+                taskTitle = name.ifBlank { "Tâche" },
+                onValueChange = { note = it },
+                onDismiss = { showNoteEditor = false },
+            )
+        }
 
         // Impact
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1091,6 +1111,7 @@ private fun EditTaskForm(
             singleLine = true
         )
 
+        var showNoteEditor by remember { mutableStateOf(false) }
         OutlinedTextField(
             value = note,
             onValueChange = { note = it },
@@ -1103,8 +1124,25 @@ private fun EditTaskForm(
             ),
             shape = RoundedCornerShape(12.dp),
             minLines = 2,
-            maxLines = 4
+            maxLines = 4,
+            trailingIcon = {
+                IconButton(onClick = { showNoteEditor = true }) {
+                    Icon(
+                        Icons.Filled.OpenInFull,
+                        contentDescription = "Agrandir la note",
+                        tint = SubtleWhite,
+                    )
+                }
+            }
         )
+        if (showNoteEditor) {
+            NoteEditorDialog(
+                value = note,
+                taskTitle = name.ifBlank { "Tâche" },
+                onValueChange = { note = it },
+                onDismiss = { showNoteEditor = false },
+            )
+        }
 
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Impact", color = SubtleWhite, fontSize = 13.sp)
@@ -1279,7 +1317,19 @@ private fun EditTaskForm(
 
         // Mode Projet — Story 18-6. Selector "Lier à un projet" (visible uniquement
         // si projects non vide → gated FEATURE_PROJECTS via list filtering côté caller).
+        // Parité desktop TaskEditModal.tsx:70-79 (PO 2026-05-25) : filtre todo+doing actifs.
+        // Si la tâche est déjà rattachée à un projet hors filtre (done/backlog/archived),
+        // on le surface quand même avec un suffixe pour ne pas masquer le lien existant.
         if (projects.isNotEmpty()) {
+            val inPlay = projects.filter {
+                !it.isArchived && (it.kanbanStatus == "todo" || it.kanbanStatus == "doing")
+            }
+            val selectableProjects = if (task.projectId == null || inPlay.any { it.id == task.projectId }) {
+                inPlay
+            } else {
+                val current = projects.find { it.id == task.projectId }
+                if (current != null) inPlay + current else inPlay
+            }
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Lier à un projet", color = SubtleWhite, fontSize = 13.sp)
                 androidx.compose.foundation.layout.FlowRow(
@@ -1292,9 +1342,10 @@ private fun EditTaskForm(
                         selectedColor = Color(0xFF6C6C70),
                         onClick = { onProjectChanged(null) }
                     )
-                    projects.filter { !it.isArchived }.forEach { p ->
+                    selectableProjects.forEach { p ->
+                        val offFilter = p.kanbanStatus != "todo" && p.kanbanStatus != "doing"
                         ToggleChip(
-                            label = p.name,
+                            label = if (offFilter) "${p.name} (${p.kanbanStatus})" else p.name,
                             selected = task.projectId == p.id,
                             selectedColor = Color(0xFFE53935),
                             onClick = { onProjectChanged(p.id) }

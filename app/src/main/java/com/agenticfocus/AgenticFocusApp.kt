@@ -1,16 +1,21 @@
 package com.agenticfocus
 
 import android.app.Application
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import com.agenticfocus.data.db.AppDatabase
 import com.agenticfocus.data.supabase.SupabaseClientProvider
 import com.agenticfocus.data.sync.RealtimeSyncManager
 import com.agenticfocus.data.sync.SyncEngine
 import com.agenticfocus.data.sync.SyncStatusManager
+import com.agenticfocus.worker.DailyReflectionReminderWorker
+import com.agenticfocus.worker.ReflectionReminderScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,6 +38,24 @@ class AgenticFocusApp : Application() {
         }
 
         registerNetworkCallback()
+
+        // Story 24-6 Sprint 22 Epic 24 — Daily reflection notification
+        createDailyReflectionNotificationChannel()
+        ReflectionReminderScheduler.scheduleFromPrefs(applicationContext)
+    }
+
+    private fun createDailyReflectionNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                DailyReflectionReminderWorker.CHANNEL_ID,
+                "Bilan du jour",
+                NotificationManager.IMPORTANCE_DEFAULT,
+            ).apply {
+                description = "Rappel quotidien pour écrire votre bilan du jour (Day Facts + Learning)"
+            }
+            val nm = getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(channel)
+        }
     }
 
     private fun registerNetworkCallback() {

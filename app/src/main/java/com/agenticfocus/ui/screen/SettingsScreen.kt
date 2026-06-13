@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -192,6 +193,94 @@ fun SettingsScreen(
             enabled = soundEnabled,
             onCheckedChange = { sound1min = it; prefs.sound1min = it }
         )
+
+        // ── Section: Bilan du jour (Story 24-6 Sprint 22 Epic 24) ────────────────
+        SectionHeader("📔 Bilan du jour", topPadding = true)
+
+        var reflectionNotifEnabled by remember { mutableStateOf(prefs.reflectionNotifEnabled) }
+        var reflectionNotifHour by remember { mutableStateOf(prefs.reflectionNotifHour) }
+        var reflectionNotifMinute by remember { mutableStateOf(prefs.reflectionNotifMinute) }
+
+        SettingToggleRow(
+            title = "Recevoir un rappel quotidien",
+            checked = reflectionNotifEnabled,
+            onCheckedChange = { enabled ->
+                reflectionNotifEnabled = enabled
+                prefs.reflectionNotifEnabled = enabled
+                if (enabled) {
+                    com.agenticfocus.worker.ReflectionReminderScheduler.schedule(context, reflectionNotifHour, reflectionNotifMinute)
+                } else {
+                    com.agenticfocus.worker.ReflectionReminderScheduler.cancel(context)
+                }
+            }
+        )
+
+        if (reflectionNotifEnabled) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Heure du rappel",
+                    color = TextWhite,
+                    fontSize = 14.sp,
+                    modifier = Modifier.weight(1f)
+                )
+                OutlinedTextField(
+                    value = "%02d:%02d".format(reflectionNotifHour, reflectionNotifMinute),
+                    onValueChange = {},
+                    readOnly = true,
+                    singleLine = true,
+                    modifier = Modifier.width(110.dp),
+                    colors = TextFieldDefaults.colors(
+                        focusedTextColor = TextWhite,
+                        unfocusedTextColor = TextWhite,
+                    )
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedButton(
+                    onClick = {
+                        // Quick preset 21:00
+                        reflectionNotifHour = 21; reflectionNotifMinute = 0
+                        prefs.reflectionNotifHour = 21; prefs.reflectionNotifMinute = 0
+                        com.agenticfocus.worker.ReflectionReminderScheduler.schedule(context, 21, 0)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("21:00", color = TextWhite, fontSize = 13.sp) }
+                OutlinedButton(
+                    onClick = {
+                        reflectionNotifHour = 22; reflectionNotifMinute = 0
+                        prefs.reflectionNotifHour = 22; prefs.reflectionNotifMinute = 0
+                        com.agenticfocus.worker.ReflectionReminderScheduler.schedule(context, 22, 0)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("22:00", color = TextWhite, fontSize = 13.sp) }
+                OutlinedButton(
+                    onClick = {
+                        reflectionNotifHour = 20; reflectionNotifMinute = 30
+                        prefs.reflectionNotifHour = 20; prefs.reflectionNotifMinute = 30
+                        com.agenticfocus.worker.ReflectionReminderScheduler.schedule(context, 20, 30)
+                    },
+                    modifier = Modifier.weight(1f)
+                ) { Text("20:30", color = TextWhite, fontSize = 13.sp) }
+            }
+            Text(
+                text = "Le rappel apparaîtra chaque jour à cette heure (sauf en mode batterie économe).",
+                color = SubtleWhite,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            if (BuildConfig.DEBUG) {
+                OutlinedButton(
+                    onClick = { com.agenticfocus.worker.ReflectionReminderScheduler.scheduleOneTimeDebug(context, 1L) },
+                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
+                ) { Text("🧪 Tester dans 1 minute", color = TextWhite, fontSize = 13.sp) }
+            }
+        }
 
         // ── Section: Synchronisation ─────────────────────────────────────────────
         SectionHeader("Synchronisation", topPadding = true)

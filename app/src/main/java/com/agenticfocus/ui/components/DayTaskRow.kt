@@ -264,8 +264,9 @@ fun DayTaskRow(
             }
 
             if (expanded) {
-                val visible = subtasks.take(5)
-                val overflow = subtasks.size - 5
+                val sorted = subtasks.sortedBy { it.isCompleted }
+                val visible = sorted.take(5)
+                val overflow = sorted.size - 5
                 Column(
                     modifier = Modifier.padding(start = 44.dp, top = 2.dp, bottom = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp)

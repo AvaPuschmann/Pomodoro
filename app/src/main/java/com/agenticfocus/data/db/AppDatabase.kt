@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.agenticfocus.data.dao.DailyReflectionDao
 import com.agenticfocus.data.dao.DayTaskDao
 import com.agenticfocus.data.dao.DomainDao
 import com.agenticfocus.data.dao.GoalDao
@@ -18,6 +19,7 @@ import com.agenticfocus.data.dao.SubtaskDao
 import com.agenticfocus.data.dao.SyncQueueDao
 import com.agenticfocus.data.dao.TagDao
 import com.agenticfocus.data.dao.TaskTemplateDao
+import com.agenticfocus.data.entity.DailyReflectionEntity
 import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.DomainEntity
 import com.agenticfocus.data.entity.GoalEntity
@@ -42,9 +44,10 @@ import com.agenticfocus.data.entity.TaskTemplateEntity
         RoutineEntity::class,
         RoutineItemEntity::class,
         ProjectEntity::class,
-        TagEntity::class
+        TagEntity::class,
+        DailyReflectionEntity::class
     ],
-    version = 18,
+    version = 19,
     exportSchema = false
 )
 @TypeConverters(TagIdsListConverter::class)
@@ -61,6 +64,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun routineDao(): RoutineDao
     abstract fun projectDao(): ProjectDao
     abstract fun tagDao(): TagDao
+    abstract fun dailyReflectionDao(): DailyReflectionDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -334,6 +338,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        // Bilan du Jour — Story 24-1 / Sprint 22 / Epic 24.
+        // Creates daily_reflections table (mirror Supabase) for Philippe's end-of-day ritual.
+        // 1 entry per (user_id, period_key) enforced via unique index.
+        // Word/char counts pre-computed Kotlin-side (Repository.saveReflection) for Phase 3 Analytics anticipation.
+        private val MIGRATION_18_19 = object : Migration(18, 19) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS daily_reflections (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        user_id TEXT NOT NULL DEFAULT '',
+                        period_key TEXT NOT NULL DEFAULT '',
+                        day_facts TEXT NOT NULL DEFAULT '',
+                        learning TEXT NOT NULL DEFAULT '',
+                        day_facts_word_count INTEGER NOT NULL DEFAULT 0,
+                        day_facts_char_count INTEGER NOT NULL DEFAULT 0,
+                        learning_word_count INTEGER NOT NULL DEFAULT 0,
+                        learning_char_count INTEGER NOT NULL DEFAULT 0,
+                        created_at INTEGER NOT NULL DEFAULT 0,
+                        updated_at INTEGER NOT NULL DEFAULT 0
+                    )
+                """.trimIndent())
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_daily_reflections_user_id_period_key ON daily_reflections(user_id, period_key)")
+            }
+        }
+
         private val MIGRATION_12_13 = object : Migration(12, 13) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("""
@@ -438,7 +467,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "agenticfocus.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
                     .build()
                     .also { INSTANCE = it }
             }
