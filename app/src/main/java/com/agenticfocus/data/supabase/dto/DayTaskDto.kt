@@ -46,8 +46,11 @@ data class DayTaskDto(
     @SerialName("created_at") val createdAt: Long,
     @SerialName("user_id") val userId: String,
     @SerialName("updated_at") val updatedAt: Long,
+    // PAS de valeur par défaut : sinon kotlinx omet le champ quand il vaut false
+    // (encodeDefaults=false) → décocher une tâche ne réinitialise jamais is_completed
+    // côté Supabase → la tâche reste "done" et la synchro diverge. Colonne NOT NULL.
     @Serializable(with = BooleanOrIntSerializer::class)
-    @SerialName("is_completed") val isCompleted: Boolean = false,
+    @SerialName("is_completed") val isCompleted: Boolean,
     val source: String? = null,
     @SerialName("routine_item_id") val routineItemId: String? = null,
     val note: String? = null,
