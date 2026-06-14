@@ -13,7 +13,10 @@ data class GoalDto(
     val text: String,
     // Supabase stores this as BOOLEAN — convert to 0/1 for Room
     @SerialName("is_completed") val isCompleted: Boolean,
-    @SerialName("is_missed") val isMissed: Boolean = false,  // tri-état raté
+    // PAS de valeur par défaut : sinon kotlinx omet le champ quand il vaut false
+    // (encodeDefaults=false) → l'upsert ne réinitialise jamais is_missed côté Supabase
+    // → un objectif "raté" reste bloqué en rouge. La colonne est NOT NULL DEFAULT false.
+    @SerialName("is_missed") val isMissed: Boolean,  // tri-état raté
     @SerialName("created_at") val createdAt: Long,
     @SerialName("updated_at") val updatedAt: Long
 )
