@@ -16,6 +16,7 @@ data class GoalEntity(
     @ColumnInfo(name = "period_key", defaultValue = "") val periodKey: String = "",
     @ColumnInfo(defaultValue = "") val text: String = "",
     @ColumnInfo(name = "is_completed", defaultValue = "0") val isCompleted: Int = 0,
+    @ColumnInfo(name = "is_missed", defaultValue = "0") val isMissed: Int = 0,  // tri-état : raté explicite
     @ColumnInfo(name = "created_at", defaultValue = "0") val createdAt: Long = System.currentTimeMillis(),
     @ColumnInfo(name = "updated_at", defaultValue = "0") val updatedAt: Long = System.currentTimeMillis()
 )

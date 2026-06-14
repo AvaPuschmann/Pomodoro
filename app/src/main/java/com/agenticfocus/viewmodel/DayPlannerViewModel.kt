@@ -169,10 +169,15 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     fun toggleGoal(goal: GoalEntity) {
-        val updated = goal.copy(
-            isCompleted = if (goal.isCompleted == 1) 0 else 1,
-            updatedAt = System.currentTimeMillis()
-        )
+        // Tri-état qui cycle : à faire (0,0) → atteint (1,0) → raté (0,1) → à faire (0,0).
+        val done = goal.isCompleted == 1
+        val missed = goal.isMissed == 1
+        val cycled = when {
+            !done && !missed -> goal.copy(isCompleted = 1, isMissed = 0)
+            done -> goal.copy(isCompleted = 0, isMissed = 1)
+            else -> goal.copy(isCompleted = 0, isMissed = 0)
+        }
+        val updated = cycled.copy(updatedAt = System.currentTimeMillis())
         viewModelScope.launch(Dispatchers.IO) { goalRepository.save(updated) }
     }
 

@@ -76,6 +76,7 @@ private fun GoalRow(
     val focusManager = LocalFocusManager.current
 
     val isDone = goal?.isCompleted == 1
+    val isMissed = goal?.isMissed == 1
     val text = goal?.text ?: ""
 
     LaunchedEffect(editing) {
@@ -98,24 +99,34 @@ private fun GoalRow(
             .fillMaxWidth()
             .padding(vertical = 5.dp)
     ) {
-        // Checkbox
+        // Checkbox tri-état : à faire → atteint ✓ → raté ✗
+        val markColor = when {
+            isDone -> Color(0xFF34C759)
+            isMissed -> Color(0xFFFF453A)
+            else -> null
+        }
         Box(
             modifier = Modifier
                 .size(20.dp)
                 .background(
-                    color = if (isDone) Color(0xFF34C759) else Color.White.copy(alpha = 0.08f),
+                    color = markColor ?: Color.White.copy(alpha = 0.08f),
                     shape = RoundedCornerShape(4.dp)
                 )
                 .border(
                     width = 1.dp,
-                    color = if (isDone) Color(0xFF34C759) else Color.White.copy(alpha = 0.55f),
+                    color = markColor ?: Color.White.copy(alpha = 0.55f),
                     shape = RoundedCornerShape(4.dp)
                 )
                 .clickable(enabled = goal != null) { onToggle() },
             contentAlignment = Alignment.Center
         ) {
-            if (isDone) {
-                Text("✓", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            if (isDone || isMissed) {
+                Text(
+                    if (isDone) "✓" else "✗",
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
 
@@ -153,12 +164,13 @@ private fun GoalRow(
             Text(
                 text = if (text.isNotEmpty()) text else "Appuyer pour définir…",
                 color = when {
+                    isMissed -> Color(0xFFFF453A).copy(alpha = 0.65f)
                     isDone -> Color.White.copy(alpha = 0.50f)
                     text.isNotEmpty() -> Color.White
                     else -> Color.White.copy(alpha = 0.45f)
                 },
                 fontSize = 14.sp,
-                textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
+                textDecoration = if (isDone || isMissed) TextDecoration.LineThrough else TextDecoration.None,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
@@ -215,6 +227,7 @@ fun GoalsCard(
             periodKey = periodKey,
             text = text,
             isCompleted = existing?.isCompleted ?: 0,
+            isMissed = existing?.isMissed ?: 0,
             createdAt = existing?.createdAt ?: System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )
@@ -250,12 +263,13 @@ fun GoalsCard(
                 text = "☀️ ${dayGoal?.text ?: "Définir l'objectif du jour…"}",
                 color = when {
                     dayGoal == null -> Color.White.copy(alpha = 0.45f)
+                    dayGoal.isMissed == 1 -> Color(0xFFFF453A).copy(alpha = 0.65f)
                     dayGoal.isCompleted == 1 -> Color.White.copy(alpha = 0.45f)
                     else -> Color.White
                 },
-                textDecoration = if (dayGoal?.isCompleted == 1) TextDecoration.LineThrough else TextDecoration.None,
+                textDecoration = if (dayGoal?.isCompleted == 1 || dayGoal?.isMissed == 1) TextDecoration.LineThrough else TextDecoration.None,
                 fontSize = 14.sp,
-                fontWeight = if (dayGoal != null && dayGoal.isCompleted != 1) FontWeight.Medium else FontWeight.Normal,
+                fontWeight = if (dayGoal != null && dayGoal.isCompleted != 1 && dayGoal.isMissed != 1) FontWeight.Medium else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f)

@@ -13,6 +13,7 @@ data class GoalDto(
     val text: String,
     // Supabase stores this as BOOLEAN — convert to 0/1 for Room
     @SerialName("is_completed") val isCompleted: Boolean,
+    @SerialName("is_missed") val isMissed: Boolean = false,  // tri-état raté
     @SerialName("created_at") val createdAt: Long,
     @SerialName("updated_at") val updatedAt: Long
 )
@@ -24,6 +25,7 @@ fun GoalDto.toEntity() = GoalEntity(
     periodKey = periodKey,
     text = text,
     isCompleted = if (isCompleted) 1 else 0,
+    isMissed = if (isMissed) 1 else 0,
     createdAt = createdAt,
     updatedAt = updatedAt
 )
@@ -35,6 +37,7 @@ fun GoalEntity.toDto(userId: String) = GoalDto(
     periodKey = periodKey,
     text = text,
     isCompleted = isCompleted == 1,
+    isMissed = isMissed == 1,
     createdAt = createdAt,
     updatedAt = System.currentTimeMillis()
 )
