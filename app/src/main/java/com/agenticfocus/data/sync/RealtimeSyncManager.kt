@@ -46,7 +46,7 @@ object RealtimeSyncManager {
 
     private const val TAG = "RealtimeSyncManager"
     private const val PAGE_SIZE = 1000
-    private const val PERIODIC_INTERVAL_MS = 300_000L // 5 minutes (was 30s before A1 fix)
+    private const val PERIODIC_INTERVAL_MS = 120_000L // 2 minutes — filet de secours si realtime rate des events
 
     // A2.5 — Swallows uncaught exceptions from Realtime subscription cleanup.
     // supabase-kt 2.6.1 has a race condition in CallbackManagerImpl.removeCallbackById
@@ -428,7 +428,10 @@ object RealtimeSyncManager {
                 if (!isNowConnected && wasConnected) {
                     SyncStatusManager.setOffline()
                 }
-                if (isNowConnected && wasConnected) {
+                // Vrai reconnect = on passe de déconnecté à connecté → pull de rattrapage
+                // (récupère les events manqués pendant la coupure). Avant : `&& wasConnected`
+                // qui ne se déclenchait jamais sur une reconnexion réelle.
+                if (isNowConnected && !wasConnected) {
                     pullSync(userId)
                 }
                 wasConnected = isNowConnected
