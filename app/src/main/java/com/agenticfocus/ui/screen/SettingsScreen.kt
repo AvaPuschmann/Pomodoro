@@ -316,13 +316,44 @@ fun SettingsScreen(
             )
         }
 
+        // ── À propos ─────────────────────────────────────────────────────────────
+        SectionHeader(title = "À propos", topPadding = true)
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(text = "🍅", fontSize = 32.sp)
+            Column {
+                Text(
+                    text = "AgenticFocus",
+                    color = TextWhite,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Version ${BuildConfig.VERSION_NAME} — Mobile",
+                    color = SubtleWhite,
+                    fontSize = 13.sp
+                )
+                Text(
+                    text = "© 2024-2025 Philippe Puschmann",
+                    color = SubtleWhite.copy(alpha = 0.5f),
+                    fontSize = 11.sp
+                )
+            }
+        }
+
         // ── Logout ───────────────────────────────────────────────────────────────
         Button(
             onClick = onSignOut,
             colors = ButtonDefaults.buttonColors(containerColor = TomatoRed),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 32.dp)
+                .padding(top = 16.dp)
         ) {
             Text("Se déconnecter", color = TextWhite)
         }
