@@ -39,6 +39,7 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
     val selectedDate: StateFlow<LocalDate> = _selectedDate.asStateFlow()
 
     private val repository = DayPlannerRepository(
+        db = AppDatabase.getInstance(application),
         dayTaskDao = AppDatabase.getInstance(application).dayTaskDao(),
         sessionDao = AppDatabase.getInstance(application).pomodoroSessionDao()
     )
@@ -261,8 +262,15 @@ class DayPlannerViewModel(application: Application) : AndroidViewModel(applicati
                 activeTaskId = if (s.activeTaskId == id) null else s.activeTaskId
             )
         }
-        viewModelScope.launch { repository.deleteTask(id) }
-        persistAll()
+        // deleteTask AVANT saveAllTasks dans le même coroutine : quand la transaction de
+        // saveAllTasks émet via le Flow, la tâche supprimée est déjà absente de la DB,
+        // donc elle ne réapparaît pas dans l'état réémis par observeTasksForDate.
+        viewModelScope.launch {
+            repository.deleteTask(id)
+            val snapshot = _state.value.tasks
+            val date = _selectedDate.value.toString()
+            repository.saveAllTasks(snapshot, date)
+        }
     }
 
     fun reorderTasks(fromIndex: Int, toIndex: Int) {

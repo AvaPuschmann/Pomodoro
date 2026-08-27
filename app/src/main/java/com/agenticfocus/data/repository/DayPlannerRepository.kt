@@ -1,7 +1,9 @@
 package com.agenticfocus.data.repository
 
+import androidx.room.withTransaction
 import com.agenticfocus.data.dao.DayTaskDao
 import com.agenticfocus.data.dao.PomodoroSessionDao
+import com.agenticfocus.data.db.AppDatabase
 import com.agenticfocus.data.entity.DayTaskEntity
 import com.agenticfocus.data.entity.PomodoroSessionEntity
 import com.agenticfocus.data.sync.SyncEngine
@@ -10,6 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 class DayPlannerRepository(
+    private val db: AppDatabase,
     private val dayTaskDao: DayTaskDao,
     private val sessionDao: PomodoroSessionDao
 ) {
@@ -32,10 +35,36 @@ class DayPlannerRepository(
     }
 
     suspend fun saveAllTasks(tasks: List<DayTask>, date: String) {
-        val entities = tasks.mapIndexed { index, task -> task.toEntity(date, index) }
-        dayTaskDao.upsertAll(entities)
-        entities.forEach { entity ->
-            try { SyncEngine.upsertDayTask(entity) } catch (_: Exception) {}
+        val now = System.currentTimeMillis()
+        // Transaction atomique : Room's InvalidationTracker n'émet qu'UNE FOIS à la fin,
+        // au lieu de N fois (une par updatePlannerFields). Sans transaction, chaque écriture
+        // déclenchait une émission du Flow avec des positions incohérentes (ex. deux tâches
+        // à position=0 pendant un réordonnancement) → liste visible qui saute N fois.
+        // Mise à jour partielle via updatePlannerFields : ne touche JAMAIS completed_pomodoros.
+        // Ce champ appartient exclusivement au coroutine IO du TimerService (auto-incrément).
+        // Fallback upsert pour les tâches nouvelles pas encore en DB (ex. addTask optimiste).
+        db.withTransaction {
+            tasks.forEachIndexed { index, task ->
+                val rowsUpdated = dayTaskDao.updatePlannerFields(
+                    id = task.id, position = index, planned = task.plannedPomodoros,
+                    isCompleted = task.isCompleted, name = task.name,
+                    impact = task.impact, urgency = task.urgency, dueDate = task.dueDate,
+                    note = task.note, storyPoints = task.storyPoints,
+                    domainId = task.domainId, projectId = task.projectId, updatedAt = now
+                )
+                if (rowsUpdated == 0) {
+                    // Nouvelle tâche pas encore en DB — upsert complet (completedPomodoros = 0, sûr)
+                    dayTaskDao.upsert(task.toEntity(date, index))
+                }
+            }
+        }
+        // SyncEngine hors transaction : pas besoin de tenir le verrou DB pour les appels réseau.
+        // Lecture DB après les écritures : les entities reflètent le completedPomodoros correct
+        // (potentiellement mis à jour par le coroutine IO du TimerService pendant nos écritures).
+        val dbMap = dayTaskDao.getTasksForDate(date).associateBy { it.id }
+        tasks.forEach { task ->
+            val entityForSync = dbMap[task.id] ?: return@forEach
+            try { SyncEngine.upsertDayTask(entityForSync) } catch (_: Exception) {}
         }
     }
 

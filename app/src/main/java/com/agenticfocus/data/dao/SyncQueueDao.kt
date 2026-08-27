@@ -26,4 +26,7 @@ interface SyncQueueDao {
 
     @Query("DELETE FROM sync_queue WHERE entity_type = :entityType")
     suspend fun deleteByEntityType(entityType: String)
+
+    @Query("DELETE FROM sync_queue WHERE entity_id = :entityId AND entity_type = :entityType AND operation = 'UPSERT'")
+    suspend fun deletePendingUpserts(entityId: String, entityType: String)
 }
