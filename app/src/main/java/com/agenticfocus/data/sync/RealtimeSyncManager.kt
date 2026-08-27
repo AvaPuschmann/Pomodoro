@@ -418,13 +418,27 @@ object RealtimeSyncManager {
 
                 // Delete locals absent from remote, protecting pending upserts (local newer)
                 // and pending deletes (already removed locally, awaiting flush).
-                for (localId in localIds) {
-                    if (localId !in remoteIds &&
-                        localId !in pendingUpsertIds &&
-                        localId !in pendingDeleteIds
-                    ) {
-                        db.dayTaskDao().deleteById(localId)
+                //
+                // Story 31-6 — garde isNotEmpty : sans elle, une réponse 200 SANS aucune ligne
+                // (RLS pas encore appliquée sur une session fraîche, JWT non propagé) vidait
+                // remoteIds et supprimait la TOTALITÉ des tâches locales. Un échec réseau est
+                // sans danger — fetchAllUserRows throw et le catch englobant annule toute
+                // réconciliation partielle (F3). C'est la réponse vide *réussie* qui détruit.
+                //
+                // Les quatre tables clear-then-replace ci-dessus (domains, task_templates,
+                // projects, tags) étaient déjà gardées ; la réconciliation, pourtant l'opération
+                // la plus destructrice, ne l'était pas. Même écart que côté desktop (story 31-1).
+                if (tasks.isNotEmpty()) {
+                    for (localId in localIds) {
+                        if (localId !in remoteIds &&
+                            localId !in pendingUpsertIds &&
+                            localId !in pendingDeleteIds
+                        ) {
+                            db.dayTaskDao().deleteById(localId)
+                        }
                     }
+                } else {
+                    Log.w(TAG, "day_tasks fetch returned 0 rows — skipping local deletions to preserve data")
                 }
 
                 // Upsert remote rows, skipping any with pending local mutations
