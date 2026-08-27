@@ -16,8 +16,12 @@ import androidx.core.app.NotificationCompat
 import com.agenticfocus.MainActivity
 import com.agenticfocus.R
 import com.agenticfocus.data.AppPreferences
+import com.agenticfocus.data.supabase.SupabaseClientProvider
+import com.agenticfocus.data.supabase.dto.ActivePomodoroDto
 import com.agenticfocus.viewmodel.Phase
 import com.agenticfocus.viewmodel.PomodoroState
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -226,6 +230,54 @@ class TimerService : Service() {
         return START_STICKY
     }
 
+    private fun publishActivePomodoro() {
+        val state = _timerState.value
+        serviceScope.launch {
+            try {
+                val userId = SupabaseClientProvider.client.auth.currentUserOrNull()?.id
+                    ?: return@launch
+                SupabaseClientProvider.client.from("active_pomodoro").upsert(
+                    ActivePomodoroDto(
+                        userId = userId,
+                        taskId = state.activeTaskId,
+                        taskName = state.taskName.ifBlank { null },
+                        platform = "mobile",
+                        sessionType = if (state.phase == Phase.FOCUS) "work" else "break",
+                        startedAt = System.currentTimeMillis(),
+                        plannedDurationMs = state.totalSeconds * 1000L,
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                )
+                Log.d(TAG, "active_pomodoro published: task=${state.taskName}")
+            } catch (e: Exception) {
+                Log.w(TAG, "active_pomodoro publish failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun clearActivePomodoro() {
+        serviceScope.launch {
+            try {
+                val userId = SupabaseClientProvider.client.auth.currentUserOrNull()?.id
+                    ?: return@launch
+                SupabaseClientProvider.client.from("active_pomodoro").upsert(
+                    ActivePomodoroDto(
+                        userId = userId,
+                        taskId = null,
+                        taskName = null,
+                        platform = "mobile",
+                        sessionType = "work",
+                        startedAt = null,
+                        plannedDurationMs = null,
+                        updatedAt = System.currentTimeMillis(),
+                    )
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "active_pomodoro clear failed: ${e.message}")
+            }
+        }
+    }
+
     private fun handleStart() {
         val state = _timerState.value
         acquireWakeLock()
@@ -246,6 +298,7 @@ class TimerService : Service() {
 
         startedAt = System.currentTimeMillis() - ((totalSecs - remainingSecs) * 1000L)
         _timerState.value = state.copy(isRunning = true)
+        publishActivePomodoro()
 
         tickJob?.cancel()
         tickJob = serviceScope.launch {
@@ -312,6 +365,7 @@ class TimerService : Service() {
         releaseWakeLock()
         persistState()
         updateNotification()
+        clearActivePomodoro()
     }
 
     private fun handleReset(phase: Phase) {
@@ -327,6 +381,7 @@ class TimerService : Service() {
             isRunning = false
         )
         stopForeground(STOP_FOREGROUND_REMOVE)
+        clearActivePomodoro()
     }
 
     // F2 fix: sound and vibration dispatched on Main thread for OEM compatibility
@@ -418,11 +473,12 @@ class TimerService : Service() {
             completedPomodoros = newCount
         )
         updateNotification()
+        clearActivePomodoro()
 
         // Auto-chain: wait for sounds to finish, then start next phase
         if (shouldAutoChain) {
             delay(1500L)
-            handleStart()
+            handleStart() // will re-publish for the break/next focus phase
         }
     }
 
