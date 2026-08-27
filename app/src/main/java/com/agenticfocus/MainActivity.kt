@@ -124,6 +124,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Doit être positionné AVANT les early-returns ci-dessous, sinon le flag reste
+        // faux pour un utilisateur non encore authentifié et le pull périodique ne
+        // repartirait jamais après un login.
+        RealtimeSyncManager.isForeground = true
         val userId = authenticatedUserId ?: return
         val repo = routineRepo ?: return
         // A1 (F8) — Catch-up on Realtime events potentially missed while in background.
@@ -131,6 +135,13 @@ class MainActivity : ComponentActivity() {
         // foreground for stale data to reconcile.
         RealtimeSyncManager.triggerPull(userId)
         lifecycleScope.launch { repo.injectRoutinesForToday(userId) }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Suspend le pull périodique en arrière-plan (egress). Le Realtime reste abonné ;
+        // le rattrapage est assuré par triggerPull() dans onResume ci-dessus.
+        RealtimeSyncManager.isForeground = false
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -196,7 +207,7 @@ class MainActivity : ComponentActivity() {
                         SupabaseAuthRepository(SupabaseClientProvider.client)
                     }
                     val authVM: AuthViewModel = viewModel(
-                        factory = AuthViewModelFactory(authRepository)
+                        factory = AuthViewModelFactory(authRepository, applicationContext)
                     )
 
                     LaunchedEffect(Unit) {

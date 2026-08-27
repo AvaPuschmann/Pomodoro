@@ -46,7 +46,36 @@ object RealtimeSyncManager {
 
     private const val TAG = "RealtimeSyncManager"
     private const val PAGE_SIZE = 1000
-    private const val PERIODIC_INTERVAL_MS = 120_000L // 2 minutes — filet de secours si realtime rate des events
+    // Filet de secours si le realtime rate des events.
+    //
+    // 2026-08-06 : porté de 2 min à 5 min. Chaque tick déclenche un pullSync() complet
+    // (toutes les tables, sans filtre updated_at) ; à 2 min cela représentait ~3,2 GB/mois
+    // d'egress Supabase, principal contributeur au dépassement du quota gratuit après le
+    // desktop (voir _bmad-output/implementation-artifacts/quick-spec-egress-reduction.md).
+    //
+    // Sûr car trois autres chemins déclenchent déjà un pull complet et ne changent pas :
+    // le pull de démarrage dans startSync(), monitorReconnect() sur toute reconnexion
+    // Realtime, et surtout triggerPull() depuis MainActivity.onResume — c'est-à-dire à
+    // chaque retour de l'utilisateur dans l'app, le moment où la fraîcheur compte vraiment.
+    private const val PERIODIC_INTERVAL_MS = 300_000L // 5 minutes
+
+    /**
+     * True tant que l'utilisateur a l'app à l'écran. Positionné par MainActivity
+     * (onResume → true, onPause → false).
+     *
+     * 2026-08-06 : stopSync() n'est JAMAIS appelé sur onPause — le scope de sync survit
+     * donc à la mise en arrière-plan et startPeriodicSync continuait de puller toutes les
+     * tables tant que le processus vivait, écran éteint compris. On synchronisait pour
+     * personne, en pure perte d'egress (cause majeure du dépassement de quota du 2026-08-06).
+     *
+     * On garde volontairement le Realtime abonné en arrière-plan (il est quasi gratuit et
+     * évite un cycle resubscribe coûteux au retour) ; seul le pull périodique est suspendu.
+     * Rien n'est perdu au retour : MainActivity.onResume appelle triggerPull().
+     *
+     * @Volatile car écrit depuis le thread UI et lu depuis la coroutine de sync (Dispatchers.IO).
+     */
+    @Volatile
+    var isForeground: Boolean = true
 
     // A2.5 — Swallows uncaught exceptions from Realtime subscription cleanup.
     // supabase-kt 2.6.1 has a race condition in CallbackManagerImpl.removeCallbackById
@@ -460,6 +489,7 @@ object RealtimeSyncManager {
         scope.launch {
             while (true) {
                 delay(PERIODIC_INTERVAL_MS)
+                if (!isForeground) continue // app en arrière-plan — voir isForeground
                 if (SyncStatusManager.status.value != SyncStatusManager.SyncStatus.OFFLINE) {
                     pullSync(userId)
                 }

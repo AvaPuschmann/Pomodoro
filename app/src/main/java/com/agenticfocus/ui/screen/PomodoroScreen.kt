@@ -21,9 +21,14 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,7 +45,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.foundation.Image
 import com.agenticfocus.R
 import com.agenticfocus.data.AppPreferences
+import com.agenticfocus.data.supabase.SupabaseClientProvider
+import com.agenticfocus.data.supabase.dto.ActivePomodoroDto
+import com.agenticfocus.data.supabase.dto.ActivePomodoroReadDto
+import com.agenticfocus.data.sync.RealtimeSyncManager
 import com.agenticfocus.ui.components.SessionButtons
+import io.github.jan.supabase.gotrue.auth
+import io.github.jan.supabase.postgrest.from
+import kotlinx.coroutines.delay
 import com.agenticfocus.ui.components.TaskInput
 import com.agenticfocus.ui.components.TimerDial
 import com.agenticfocus.ui.components.TomatoPlanner
@@ -58,6 +70,55 @@ fun PomodoroScreen(
     contentPadding: PaddingValues = PaddingValues()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Epic 30 — découverte du pomodoro distant (desktop → mobile) pour afficher le bandeau.
+    //
+    // 2026-08-06 : poll porté de 5 s à 30 s, et suspendu pendant que le timer local tourne.
+    // `active_pomodoro` ne contient qu'UNE ligne par user (PK user_id) : dès que le timer
+    // mobile démarre, TimerService y écrit platform='mobile' et écrase la ligne desktop.
+    // Poller pendant ce temps ne peut donc renvoyer que notre propre ligne, filtrée plus bas.
+    //
+    // La latence de découverte n'affecte pas la précision : le chrono du bandeau est calculé
+    // localement à partir de startedAt. `key(state.isRunning)` relance l'effet à l'arrêt du
+    // timer local, donc le bandeau distant réapparaît sans attendre.
+    var remoteDesktopSession by remember { mutableStateOf<ActivePomodoroDto?>(null) }
+    LaunchedEffect(state.isRunning) {
+        if (state.isRunning) {
+            remoteDesktopSession = null
+            return@LaunchedEffect
+        }
+        while (true) {
+            // App en arrière-plan : ce LaunchedEffect survit à la mise en tâche de fond
+            // (la composition est conservée), il pollait donc toute la nuit. Même garde
+            // que le pull périodique — voir RealtimeSyncManager.isForeground.
+            if (!RealtimeSyncManager.isForeground) {
+                delay(30_000)
+                continue
+            }
+            try {
+                val userId = SupabaseClientProvider.client.auth.currentUserOrNull()?.id
+                if (userId != null) {
+                    val rows = SupabaseClientProvider.client
+                        .from("active_pomodoro")
+                        .select { filter { eq("user_id", userId) } }
+                        .decodeList<ActivePomodoroReadDto>()
+                    val row = rows.firstOrNull()
+                    remoteDesktopSession = if (row?.platform == "desktop" && row.taskId != null)
+                        ActivePomodoroDto(
+                            userId = row.userId,
+                            taskId = row.taskId,
+                            taskName = row.taskName,
+                            platform = row.platform,
+                            sessionType = row.sessionType ?: "work",
+                            startedAt = row.startedAt,
+                            plannedDurationMs = row.plannedDurationMs,
+                            updatedAt = row.updatedAt ?: 0L,
+                        ) else null
+                }
+            } catch (_: Exception) { /* non-critique */ }
+            delay(30_000)
+        }
+    }
 
     val context = LocalContext.current
     val goalsEnabled = remember { AppPreferences(context).featureGoals }
@@ -105,6 +166,38 @@ fun PomodoroScreen(
             )
 
             Spacer(modifier = Modifier.height(16.dp))
+
+            // Epic 30 — desktop active pomodoro banner
+            if (remoteDesktopSession != null) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 24.dp)
+                        .fillMaxWidth()
+                        .background(Color(0xFFFBB924).copy(alpha = 0.13f), RoundedCornerShape(10.dp))
+                        .border(1.dp, Color(0xFFFBB924).copy(alpha = 0.32f), RoundedCornerShape(10.dp))
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text("🖥️", fontSize = 14.sp)
+                    Text(
+                        text = "Desktop",
+                        color = Color(0xFFFBB924),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text("·", color = Color.White.copy(alpha = 0.4f), fontSize = 13.sp)
+                    Text(
+                        text = "🍅 ${remoteDesktopSession!!.taskName ?: "Pomodoro en cours"}",
+                        color = Color.White.copy(alpha = 0.9f),
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
             // Day goal block — only when feature is enabled
             if (goalsEnabled) {

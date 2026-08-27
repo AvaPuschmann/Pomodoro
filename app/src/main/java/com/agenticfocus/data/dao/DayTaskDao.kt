@@ -79,6 +79,42 @@ interface DayTaskDao {
 
     @Query("SELECT * FROM day_tasks WHERE id = :id")
     suspend fun getById(id: String): DayTaskEntity?
+
+    // Mise à jour partielle des champs contrôlés par le Day Planner UI.
+    // N'écrit JAMAIS completed_pomodoros : ce champ appartient exclusivement
+    // au coroutine IO du TimerService (auto-incrément). Évite la race condition
+    // où persistAll() snapshot stale (completedPomodoros=2) et écrase un
+    // incrément en vol (completedPomodoros=3). Retourne le nb de rows modifiées.
+    @Query("""
+        UPDATE day_tasks
+        SET position = :position,
+            planned_pomodoros = :planned,
+            is_completed = :isCompleted,
+            name = :name,
+            impact = :impact,
+            urgency = :urgency,
+            due_date = :dueDate,
+            note = :note,
+            story_points = :storyPoints,
+            domain_id = :domainId,
+            project_id = :projectId,
+            updated_at = :updatedAt
+        WHERE id = :id
+    """)
+    suspend fun updatePlannerFields(
+        id: String, position: Int, planned: Int,
+        isCompleted: Boolean, name: String,
+        impact: String?, urgency: String?, dueDate: Long?, note: String?,
+        storyPoints: Int, domainId: String?, projectId: String?,
+        updatedAt: Long
+    ): Int
+
+    /**
+     * Récupère un user_id présent dans les données locales. Sert au mode standalone
+     * (hors ligne) à retrouver l'identifiant réel sans appel réseau — voir StandaloneMode.
+     */
+    @Query("SELECT user_id FROM day_tasks WHERE user_id IS NOT NULL AND user_id != '' LIMIT 1")
+    suspend fun findAnyUserId(): String?
 }
 
 data class ProjectStatsRow(

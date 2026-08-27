@@ -22,6 +22,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -195,6 +197,30 @@ fun LoginScreen(authViewModel: AuthViewModel) {
                     Text(
                         text = if (isRegisterMode) "Déjà un compte ? Se connecter"
                                else "Pas encore de compte ? Créer un compte",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Échappatoire hors ligne — indispensable quand Supabase est injoignable
+                // (quota, panne, avion). Les données sont en Room, seule l'auth exige le
+                // réseau : sans ce bouton l'utilisateur est enfermé dehors de ses données.
+                if (!isRegisterMode) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            focusManager.clearFocus()
+                            authViewModel.enterStandalone()
+                        },
+                        enabled = !isLoading,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Travailler en local (hors ligne)")
+                    }
+                    Text(
+                        text = "Ouvre vos données déjà présentes sur cet appareil. Vos " +
+                               "modifications sont conservées et synchronisées à la " +
+                               "prochaine connexion.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

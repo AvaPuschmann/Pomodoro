@@ -287,13 +287,28 @@ object SyncEngine {
     // ── Flush (process offline queue) ─────────────────────────────────────────
 
     suspend fun flush() {
+        // Mode local : ne JAMAIS flusher. Chaque tentative échouerait, ferait grimper
+        // retryCount jusqu'à MAX_RETRIES, et les UPSERT bloqués seraient alors purgés
+        // (voir la boucle ci-dessous) — soit une perte sèche des modifications faites
+        // hors ligne. Les entrées doivent juste attendre le prochain vrai signIn.
+        //
+        // Repositionner OFFLINE est indispensable : AgenticFocusApp.onAvailable appelle
+        // setSyncing() AVANT flush(). Un simple `return` laisserait le statut coincé sur
+        // SYNCING et l'indicateur tournerait indéfiniment.
+        if (com.agenticfocus.data.auth.StandaloneMode.isActive) {
+            SyncStatusManager.setOffline()
+            return
+        }
         val dao = syncQueueDao ?: return
         SyncStatusManager.setSyncing()
         try {
             val entries = dao.getAll()
             for (entry in entries) {
                 if (entry.retryCount >= MAX_RETRIES) {
-                    dao.deleteById(entry.id)
+                    // Keep stuck DELETE entries in queue — they shield pullSync from re-inserting
+                    // locally-deleted tasks whose remote delete is still failing.
+                    // Purge stuck UPSERTs (no shield purpose, just stale data).
+                    if (entry.operation != "DELETE") dao.deleteById(entry.id)
                     continue
                 }
                 val success = replayEntry(entry)
@@ -329,7 +344,12 @@ object SyncEngine {
     }
 
     private suspend fun enqueue(entityType: String, entityId: String, operation: String, payload: String) {
-        syncQueueDao?.insert(
+        val dao = syncQueueDao ?: return
+        // Dedup: discard stale UPSERT entries for the same entity before inserting the fresh one
+        if (operation == "UPSERT") {
+            dao.deletePendingUpserts(entityId, entityType)
+        }
+        dao.insert(
             SyncQueueEntity(
                 entityType = entityType,
                 entityId = entityId,

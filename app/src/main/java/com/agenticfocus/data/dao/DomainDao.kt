@@ -34,4 +34,8 @@ interface DomainDao {
 
     @Query("DELETE FROM domains")
     suspend fun deleteAll()
+
+    /** Repli de [com.agenticfocus.data.dao.DayTaskDao.findAnyUserId] pour le mode standalone. */
+    @Query("SELECT user_id FROM domains WHERE user_id IS NOT NULL AND user_id != '' LIMIT 1")
+    suspend fun findAnyUserId(): String?
 }
