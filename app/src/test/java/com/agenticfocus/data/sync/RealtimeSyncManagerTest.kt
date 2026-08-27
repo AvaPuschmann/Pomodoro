@@ -28,7 +28,7 @@ class RealtimeSyncManagerTest {
         val dto = DayTaskDto(
             id = "task-1", date = "2026-03-19", name = "Test Task",
             plannedPomodoros = 3, completedPomodoros = 1, position = 0,
-            templateId = "tmpl-1", createdAt = 1_000L, userId = "user-1", updatedAt = 2_000L
+            templateId = "tmpl-1", createdAt = 1_000L, userId = "user-1", updatedAt = 2_000L, isCompleted = false
         )
         val entity = dto.toEntity()
         assertEquals("task-1", entity.id)
@@ -48,7 +48,7 @@ class RealtimeSyncManagerTest {
         val dto = DayTaskDto(
             id = "t2", date = "2026-03-19", name = "No Template",
             plannedPomodoros = 1, completedPomodoros = 0, position = 1,
-            templateId = null, createdAt = 0L, userId = "u1", updatedAt = 0L
+            templateId = null, createdAt = 0L, userId = "u1", updatedAt = 0L, isCompleted = false
         )
         val entity = dto.toEntity()
         assertEquals(null, entity.templateId)
@@ -149,7 +149,7 @@ class RealtimeSyncManagerTest {
         val dto = DayTaskDto(
             id = "remote-task", date = "2026-03-19", name = "From Desktop",
             plannedPomodoros = 4, completedPomodoros = 2, position = 1,
-            templateId = null, createdAt = 0L, userId = "user-1", updatedAt = 7000L
+            templateId = null, createdAt = 0L, userId = "user-1", updatedAt = 7000L, isCompleted = false
         )
         // Simulate what RealtimeSyncManager does on INSERT event
         dao.upsert(dto.toEntity())
@@ -165,7 +165,7 @@ class RealtimeSyncManagerTest {
         val dto = DayTaskDto(
             id = "deleted-task", date = "2026-03-19", name = "Gone",
             plannedPomodoros = 1, completedPomodoros = 0, position = 0,
-            templateId = null, createdAt = 0L, userId = "user-1", updatedAt = 0L
+            templateId = null, createdAt = 0L, userId = "user-1", updatedAt = 0L, isCompleted = false
         )
         // Simulate what RealtimeSyncManager does on DELETE event
         dao.deleteById(dto.id)

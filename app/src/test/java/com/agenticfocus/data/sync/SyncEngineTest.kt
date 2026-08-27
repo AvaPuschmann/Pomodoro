@@ -118,11 +118,33 @@ class SyncEngineTest {
     }
 
     @Test
-    fun `flush discards entries that reached MAX_RETRIES`() = runBlocking {
+    fun `flush discards stuck UPSERT entries at MAX_RETRIES`() = runBlocking {
         initOnline()
-        // Entry already at MAX_RETRIES
         fakeDao.insert(SyncQueueEntity(
-            id = "q-max",
+            id = "q-max-upsert",
+            entityType = "day_tasks",
+            entityId = "task-x",
+            operation = "UPSERT",
+            payload = "{}",
+            retryCount = SyncEngine.MAX_RETRIES
+        ))
+        SyncEngine.flush()
+        assertEquals(0, fakeDao.getAll().size)
+    }
+
+    /**
+     * Story 31-3 — l'ancien test insérait un DELETE et attendait qu'il soit purgé.
+     * Le comportement a changé délibérément depuis : un DELETE bloqué est CONSERVÉ, car il
+     * sert de bouclier à pullSync — sans lui, la réconciliation ressusciterait une tâche
+     * supprimée localement dont la suppression distante échoue encore. Seuls les UPSERT
+     * bloqués sont purgés (ils ne protègent rien, ils ne portent que de la donnée périmée).
+     * Le test est scindé pour documenter cette asymétrie plutôt que d'ajuster un compteur.
+     */
+    @Test
+    fun `flush keeps stuck DELETE entries at MAX_RETRIES as a pullSync shield`() = runBlocking {
+        initOnline()
+        fakeDao.insert(SyncQueueEntity(
+            id = "q-max-delete",
             entityType = "day_tasks",
             entityId = "task-x",
             operation = "DELETE",
@@ -130,8 +152,8 @@ class SyncEngineTest {
             retryCount = SyncEngine.MAX_RETRIES
         ))
         SyncEngine.flush()
-        // Entry should be discarded
-        assertEquals(0, fakeDao.getAll().size)
+        assertEquals(1, fakeDao.getAll().size)
+        assertEquals("DELETE", fakeDao.getAll().first().operation)
     }
 
     @Test
@@ -171,6 +193,14 @@ class FakeSyncQueueDao : SyncQueueDao {
 
     override suspend fun getAll(): List<SyncQueueEntity> =
         store.sortedBy { it.createdAt }
+
+    // Story 31-3 — implémentation manquante depuis l'ajout de deletePendingUpserts au DAO
+    // (commit c7db724, stabilité du Day Planner) : le fake n'avait jamais été mis à jour et
+    // la compilation des tests était cassée. `assembleDebug` ne compile pas les sources de
+    // test, l'écart est donc passé inaperçu.
+    override suspend fun deletePendingUpserts(entityId: String, entityType: String) {
+        store.removeIf { it.entityId == entityId && it.entityType == entityType && it.operation == "UPSERT" }
+    }
 
     override suspend fun deleteById(id: String) {
         store.removeIf { it.id == id }

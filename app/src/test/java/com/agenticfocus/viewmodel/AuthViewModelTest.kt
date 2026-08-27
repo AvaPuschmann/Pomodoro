@@ -89,7 +89,8 @@ class AuthViewModelTest {
         vm.signIn("user@example.com", "wrong")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals("Email ou mot de passe incorrect", vm.errorMessage.value)
+        // Story 31-3 — le message de production se termine par un point.
+        assertEquals("Email ou mot de passe incorrect.", vm.errorMessage.value)
     }
 
     @Test

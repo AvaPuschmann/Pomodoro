@@ -30,6 +30,11 @@ class AgenticFocusApp : Application() {
 
         // Heavy initialization (Supabase client, Room DB) runs on IO to avoid blocking
         // the main thread, which would show a black window background for 3–5 seconds.
+        // Story 31-3 — synchrone et avant tout le reste : restoreSession() consulte
+        // StandaloneMode dès le premier frame, il ne peut pas attendre la coroutine IO.
+        // Opération trivial (une affectation), aucun coût de démarrage.
+        com.agenticfocus.data.auth.StandaloneMode.init(applicationContext)
+
         syncScope.launch {
             SupabaseClientProvider.initialize(applicationContext)
             val db = AppDatabase.getInstance(applicationContext)

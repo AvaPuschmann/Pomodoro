@@ -207,7 +207,7 @@ class MainActivity : ComponentActivity() {
                         SupabaseAuthRepository(SupabaseClientProvider.client)
                     }
                     val authVM: AuthViewModel = viewModel(
-                        factory = AuthViewModelFactory(authRepository, applicationContext)
+                        factory = AuthViewModelFactory(authRepository)
                     )
 
                     LaunchedEffect(Unit) {

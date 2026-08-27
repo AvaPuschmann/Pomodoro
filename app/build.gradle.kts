@@ -98,6 +98,16 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Story 31-3 — sans ceci, tout appel à android.util.Log depuis du code de production
+    // atteint en test unitaire lève « Method d in android.util.Log not mocked » et fait
+    // échouer le test pour une raison sans rapport avec ce qu'il vérifie. Le manque était
+    // resté invisible tant que les sources de test ne compilaient plus.
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
 }
 
 dependencies {

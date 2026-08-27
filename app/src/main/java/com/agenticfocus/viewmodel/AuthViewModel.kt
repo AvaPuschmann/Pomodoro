@@ -1,6 +1,5 @@
 package com.agenticfocus.viewmodel
 
-import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -30,9 +29,7 @@ sealed class AuthState {
 }
 
 class AuthViewModel(
-    private val authRepository: AuthRepository,
-    /** applicationContext — nécessaire au mode standalone (SharedPreferences + Room). */
-    private val appContext: Context,
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
@@ -50,7 +47,7 @@ class AuthViewModel(
             try {
                 // Mode local d'abord — court-circuite tout appel réseau au démarrage
                 // et surtout n'appelle PAS RealtimeSyncManager.startSync.
-                StandaloneMode.restore(appContext)?.let { localUserId ->
+                StandaloneMode.restore()?.let { localUserId ->
                     SyncEngine.currentUserId = localUserId
                     // Sinon l'indicateur resterait sur SYNCED (valeur par défaut), ce qui
                     // laisserait croire que la sync fonctionne.
@@ -84,7 +81,7 @@ class AuthViewModel(
     fun enterStandalone() {
         viewModelScope.launch {
             _errorMessage.value = null
-            val resolved = StandaloneMode.resolveUserId(appContext)
+            val resolved = StandaloneMode.resolveUserId()
             if (resolved.isNullOrBlank()) {
                 _errorMessage.value =
                     "Impossible de retrouver votre identifiant local. Le mode hors ligne " +
@@ -92,7 +89,7 @@ class AuthViewModel(
                 _authState.value = AuthState.Unauthenticated
                 return@launch
             }
-            StandaloneMode.enable(appContext, resolved)
+            StandaloneMode.enable(resolved)
             SyncEngine.currentUserId = resolved
             SyncStatusManager.setOffline()
             _authState.value = AuthState.Authenticated(resolved, "", isStandalone = true)
@@ -101,7 +98,7 @@ class AuthViewModel(
 
     /** Quitte le mode local et revient à l'écran de connexion. */
     fun exitStandalone() {
-        StandaloneMode.disable(appContext)
+        StandaloneMode.disable()
         SyncEngine.currentUserId = ""
         _authState.value = AuthState.Unauthenticated
         _errorMessage.value = null
@@ -162,7 +159,7 @@ class AuthViewModel(
                 onSuccess = { user ->
                     // Un vrai login sort du mode local : la sync reprend et vide la
                     // sync_queue accumulée hors ligne.
-                    StandaloneMode.disable(appContext)
+                    StandaloneMode.disable()
                     SyncEngine.currentUserId = user.userId
                     RealtimeSyncManager.startSync(user.userId)
                     _authState.value = AuthState.Authenticated(user.userId, user.email)
@@ -183,7 +180,7 @@ class AuthViewModel(
             authRepository.signUp(email, password).fold(
                 onSuccess = { user ->
                     // Symétrique de signIn : une vraie session réseau sort du mode local.
-                    StandaloneMode.disable(appContext)
+                    StandaloneMode.disable()
                     SyncEngine.currentUserId = user.userId
                     RealtimeSyncManager.startSync(user.userId)
                     _authState.value = AuthState.Authenticated(user.userId, user.email)
@@ -236,11 +233,10 @@ class AuthViewModel(
 }
 
 class AuthViewModelFactory(
-    private val repository: AuthRepository,
-    private val appContext: Context,
+    private val repository: AuthRepository
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         @Suppress("UNCHECKED_CAST")
-        return AuthViewModel(repository, appContext) as T
+        return AuthViewModel(repository) as T
     }
 }

@@ -22,6 +22,25 @@ object StandaloneMode {
     private const val KEY_USER_ID = "user_id"
 
     /**
+     * applicationContext, posé une fois par AgenticFocusApp.onCreate().
+     *
+     * Story 31-3 : porté ici plutôt que dans le constructeur d'AuthViewModel. Un ViewModel
+     * qui exige un Context n'est pas instanciable depuis un test JUnit pur, et l'ajouter
+     * avait cassé la compilation des 8 cas d'AuthViewModelTest. Le tenir dans cet objet
+     * garde le ViewModel testable sans introduire Robolectric ni framework de mock.
+     *
+     * Volontairement tolérant : si init() n'a pas été appelé, les méthodes se comportent
+     * comme « pas de mode local » au lieu de lever — un oubli d'initialisation dégrade,
+     * il ne crashe pas l'application au démarrage.
+     */
+    @Volatile
+    private var appContext: Context? = null
+
+    fun init(context: Context) {
+        appContext = context.applicationContext
+    }
+
+    /**
      * Lu depuis la coroutine de sync (Dispatchers.IO) et écrit depuis le thread UI.
      * Consulté par SyncEngine.flush() et RealtimeSyncManager avant tout appel réseau.
      */
@@ -35,22 +54,22 @@ object StandaloneMode {
         private set
 
     /** Restaure le mode au démarrage. Retourne le user_id si le mode était actif. */
-    fun restore(context: Context): String? {
-        val stored = prefs(context).getString(KEY_USER_ID, null)
+    fun restore(): String? {
+        val stored = prefs()?.getString(KEY_USER_ID, null)
         if (stored.isNullOrBlank()) return null
         isActive = true
         userId = stored
         return stored
     }
 
-    fun enable(context: Context, resolvedUserId: String) {
-        prefs(context).edit().putString(KEY_USER_ID, resolvedUserId).apply()
+    fun enable(resolvedUserId: String) {
+        prefs()?.edit()?.putString(KEY_USER_ID, resolvedUserId)?.apply()
         isActive = true
         userId = resolvedUserId
     }
 
-    fun disable(context: Context) {
-        prefs(context).edit().remove(KEY_USER_ID).apply()
+    fun disable() {
+        prefs()?.edit()?.remove(KEY_USER_ID)?.apply()
         isActive = false
         userId = ""
     }
@@ -63,7 +82,7 @@ object StandaloneMode {
      * partir des lignes orphelines au retour en ligne — pire qu'un échec franc.
      * On préfère donc échouer que deviner.
      */
-    suspend fun resolveUserId(context: Context): String? {
+    suspend fun resolveUserId(): String? {
         // 1. Session encore en mémoire/stockage supabase-kt (aucun appel réseau).
         //    Souvent null ici : sur une réponse 4xx du endpoint auth (cas du quota dépassé),
         //    supabase-kt purge la session stockée — d'où les replis suivants.
@@ -72,13 +91,14 @@ object StandaloneMode {
             ?.let { return it }
 
         // 2. Mode déjà activé précédemment sur cet appareil.
-        prefs(context).getString(KEY_USER_ID, null)
+        prefs()?.getString(KEY_USER_ID, null)
             ?.takeIf { it.isNotBlank() }
             ?.let { return it }
 
         // 3. Les données locales elles-mêmes : les entités Room portent une colonne
         //    user_id (même si les DAO ne filtrent pas dessus).
-        val db = AppDatabase.getInstance(context)
+        val ctx = appContext ?: return null
+        val db = AppDatabase.getInstance(ctx)
         return try {
             db.dayTaskDao().findAnyUserId()?.takeIf { it.isNotBlank() }
                 ?: db.domainDao().findAnyUserId()?.takeIf { it.isNotBlank() }
@@ -87,6 +107,6 @@ object StandaloneMode {
         }
     }
 
-    private fun prefs(context: Context) =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs() =
+        appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 }
