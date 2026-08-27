@@ -62,8 +62,11 @@ android {
         applicationId = "com.agenticfocus"
         minSdk = 31
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        // Story 31-7 — aligné sur le desktop (1.4.0/1.4.1). La version mobile était figée à
+        // 1.1.0 depuis mars : l'écran « À propos » affichait la même chose quel que soit le
+        // code installé, et ne permettait donc pas de vérifier qu'un Run ▶ avait bien pris.
+        versionCode = 3
+        versionName = "1.4.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 

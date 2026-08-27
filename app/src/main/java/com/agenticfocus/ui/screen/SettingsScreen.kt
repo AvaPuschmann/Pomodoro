@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.agenticfocus.data.AppPreferences
+import com.agenticfocus.data.auth.StandaloneMode
 import com.agenticfocus.data.sync.SyncStatusManager
 import com.agenticfocus.ui.theme.SubtleWhite
 import com.agenticfocus.ui.theme.TextWhite
@@ -304,14 +305,32 @@ fun SettingsScreen(
             modifier = Modifier.padding(top = 8.dp, bottom = 8.dp)
         )
 
+        // Story 31-7 — en mode local, la sync manuelle est un no-op (flush() sort
+        // immédiatement). La proposer active laissait croire qu'elle pouvait aboutir.
+        // Pendant mobile de ce qui était déjà fait sur le ProfilePanel desktop.
+        val isStandalone = StandaloneMode.isActive
+
+        if (isStandalone) {
+            Text(
+                text = "Vos modifications sont enregistrées sur cet appareil et partiront " +
+                       "à la prochaine connexion réussie.",
+                color = SubtleWhite,
+                fontSize = 12.sp,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+        }
+
         OutlinedButton(
             onClick = onManualSync,
-            enabled = syncStatus != SyncStatusManager.SyncStatus.SYNCING,
+            enabled = !isStandalone && syncStatus != SyncStatusManager.SyncStatus.SYNCING,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = if (syncStatus == SyncStatusManager.SyncStatus.SYNCING) "Synchronisation en cours…"
-                       else "Synchroniser maintenant",
+                text = when {
+                    isStandalone -> "Sync indisponible (mode local)"
+                    syncStatus == SyncStatusManager.SyncStatus.SYNCING -> "Synchronisation en cours…"
+                    else -> "Synchroniser maintenant"
+                },
                 color = TextWhite
             )
         }
@@ -355,7 +374,12 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(top = 16.dp)
         ) {
-            Text("Se déconnecter", color = TextWhite)
+            // Le comportement était déjà correct (signOut() détecte le mode local et sort
+            // sans appel réseau) ; seul le libellé mentait.
+            Text(
+                text = if (isStandalone) "Quitter le mode local" else "Se déconnecter",
+                color = TextWhite,
+            )
         }
     }
 }
